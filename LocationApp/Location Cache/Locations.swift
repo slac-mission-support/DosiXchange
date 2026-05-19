@@ -161,7 +161,7 @@ class LocationsCK : Locations, SettingsService {
     }
     
     fileprivate func uploadChanges(_ records: [CKRecord]) {
-        let size = 400
+        let size = 200
         var page = 1
         var total = 0
         print("Prepare to save \(records.count) records.")
