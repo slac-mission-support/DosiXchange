@@ -14,7 +14,23 @@ class Cache: Codable {
     var locations = [LocationRecordCacheItem]()
     var changes = [LocationRecordCacheItem]()
     var settings = Settings()
-    
+
+    // Transient recordName -> index map. Not persisted; rebuilt after load().
+    // Without it, add() does an O(n) firstIndex(where:) per record, which makes
+    // initial sync of N records O(N^2).
+    private var locationIndex: [String: Int] = [:]
+
+    private enum CodingKeys: String, CodingKey {
+        case version, user, locations, changes, settings
+    }
+
+    private func rebuildLocationIndex() {
+        locationIndex.removeAll(keepingCapacity: true)
+        for (i, loc) in locations.enumerated() {
+            if let name = loc.recordName { locationIndex[name] = i }
+        }
+    }
+
     static func load() -> Cache? {
         if Cache.locationRecordCacheFileExists() {
             let cacheFileURL = URL(fileURLWithPath: pathToCache())
@@ -27,16 +43,22 @@ class Cache: Codable {
                 print("Error decoding cache from data")
                 return nil
             }
+            locationsCache.rebuildLocationIndex()
             return locationsCache
         }
         return nil
     }
-    
+
     func add(_ item: LocationRecordCacheItem) {
-        if let index = locations.firstIndex(where: { l in l.recordName == item.recordName}) {
-            locations[index] = item
+        guard let name = item.recordName else {
+            locations.append(item)
+            return
+        }
+        if let i = locationIndex[name] {
+            locations[i] = item
         }
         else {
+            locationIndex[name] = locations.count
             locations.append(item)
         }
     }
@@ -53,6 +75,7 @@ class Cache: Codable {
     
     func clear() {
         locations.removeAll()
+        locationIndex.removeAll()
     }
     
     func save() {
