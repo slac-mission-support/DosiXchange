@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import CloudKit
 @testable import LocationApp
 
 class LocationAppTests: XCTestCase {
@@ -87,7 +88,65 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(r1.locdescription, "v2")
     }
 
+    // MARK: - bulkSyncDesiredKeys (Day 3: drop the photo asset from bulk sync)
+
+    func test_bulkSyncDesiredKeys_dropsPhotoButKeepsHasPhoto() {
+        let keys = LocationsCK.bulkSyncDesiredKeys
+        XCTAssertFalse(keys.contains("photo"),
+                       "Bulk sync must not pull the photo CKAsset; it is fetched lazily via fetch(id:)")
+        XCTAssertTrue(keys.contains("hasPhoto"),
+                      "hasPhoto must stay in bulk sync so the UI knows a photo exists without the asset")
+    }
+
+    func test_recordWithoutPhotoField_stillDecodesWithHasPhotoPreserved() throws {
+        // A record as it arrives after desiredKeys filtering: no photo asset.
+        let record = makeLocationRecord()
+        record.setValue(Int64(1), forKey: "hasPhoto")
+
+        let item = try XCTUnwrap(LocationRecordCacheItem(withRecord: record),
+                                 "A photo-less Location record must still decode into a cache item")
+        XCTAssertNil(item.photo, "Bulk sync omits the asset, so photo stays nil until fetch(id:)")
+        XCTAssertTrue(item.hasPhoto, "hasPhoto must survive bulk sync independent of the photo asset")
+    }
+
+    func test_bulkSyncDesiredKeys_coverEveryFieldRequiredToDecodeARecord() {
+        // Build a record holding ONLY the fields bulk sync requests. If
+        // init?(withRecord:) ever needs a field missing from the list, every
+        // synced record would silently fail to decode — this catches that drift.
+        let record = makeLocationRecord(restrictedTo: LocationsCK.bulkSyncDesiredKeys)
+
+        XCTAssertNotNil(LocationRecordCacheItem(withRecord: record),
+                        "bulkSyncDesiredKeys must include every field init?(withRecord:) requires")
+    }
+
     // MARK: - Fixtures
+
+    /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
+    /// photo CKAsset — i.e. what a record looks like after bulk-sync desiredKeys
+    /// filtering. Pass `restrictedTo` to populate only a subset of fields.
+    private func makeLocationRecord(restrictedTo allowed: [String]? = nil) -> CKRecord {
+        let record = CKRecord(recordType: "Location")
+        func set(_ key: String, _ value: Any) {
+            guard allowed == nil || allowed!.contains(key) else { return }
+            record.setValue(value, forKey: key)
+        }
+        set("QRCode", "Q-1")
+        set("latitude", "37.0")
+        set("longitude", "-122.0")
+        set("locdescription", "a location")
+        set("active", Int64(1))
+        set("dosinumber", "D-1")
+        set("collectedFlag", Int64(0))
+        set("cycleDate", "2026-01")
+        set("mismatch", Int64(0))
+        set("moderator", Int64(0))
+        set("createdDate", Date())
+        set("modifiedDate", Date())
+        set("modifiedBy", "tester")
+        set("reportGroup", "group-1")
+        set("hasPhoto", Int64(0))
+        return record
+    }
 
     private func makeItem(recordName: String?, locdescription: String = "test") throws -> LocationRecordCacheItem {
         var fields: [String] = [

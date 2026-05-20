@@ -262,10 +262,22 @@ class LocationsCK : Locations, SettingsService {
         })
     }
     
+    // Fields LocationRecordCacheItem(withRecord:) reads, minus the heavy CKAsset.
+    // Photos are fetched lazily via Locations.fetch(id:) when the user opens the
+    // detail or photo view, so excluding "photo" from bulk sync drops the biggest
+    // per-record payload from the initial download.
+    // Internal (not private) so unit tests can verify the field set.
+    static let bulkSyncDesiredKeys: [String] = [
+        "QRCode", "latitude", "longitude", "locdescription", "active",
+        "dosinumber", "collectedFlag", "cycleDate", "mismatch", "moderator",
+        "createdDate", "modifiedDate", "modifiedBy", "reportGroup", "hasPhoto"
+    ]
+
     private func add(_ query : CKQueryOperation, loaded: @escaping ((Int) -> Void), completionHandler: @escaping ([LocationRecordDelegate], Bool?, Error?,@escaping ((Int) -> Void)) -> Void) {
         var result: [LocationRecordDelegate] = []
         let operation = query
         operation.resultsLimit = 500
+        operation.desiredKeys = LocationsCK.bulkSyncDesiredKeys
         operation.recordMatchedBlock = { _, res in
             switch res {
                 case .success(let record) : result.append(record)
