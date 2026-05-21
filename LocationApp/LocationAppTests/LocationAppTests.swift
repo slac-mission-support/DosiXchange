@@ -119,6 +119,39 @@ class LocationAppTests: XCTestCase {
                         "bulkSyncDesiredKeys must include every field init?(withRecord:) requires")
     }
 
+    // MARK: - uploadChanges item→record conversion (Day 4)
+
+    // Day 4 moved the item.to() conversion out of saveChanges() and into
+    // uploadChanges()'s paging loop (slice.map { $0.to() }). These lock down
+    // the conversion the loop now depends on; Days 5-7 build the fetch-merge
+    // on top of it.
+
+    func test_to_buildsLocationRecordWithMatchingRecordID() throws {
+        let record = try makeItem(recordName: "r1").to()
+
+        XCTAssertEqual(record.recordType, "Location")
+        XCTAssertEqual(record.recordID.recordName, "r1",
+                       "uploadChanges builds the CKRecord from the cache item; the recordID must round-trip the item's recordName so the save targets the correct server record")
+    }
+
+    func test_to_copiesScalarFieldsOntoRecord() throws {
+        let record = try makeItem(recordName: "r1", locdescription: "north gate").to()
+
+        XCTAssertEqual(record["locdescription"] as? String, "north gate")
+        XCTAssertEqual(record["QRCode"] as? String, "Q")
+        XCTAssertEqual(record["latitude"] as? String, "0")
+        XCTAssertEqual(record["longitude"] as? String, "0")
+        XCTAssertEqual(record["active"] as? Int64, 0)
+    }
+
+    func test_to_mapsHasPhotoBoolToRecordInt() throws {
+        let withPhoto = try makeItem(recordName: "r1", hasPhoto: true).to()
+        let withoutPhoto = try makeItem(recordName: "r2", hasPhoto: false).to()
+
+        XCTAssertEqual(withPhoto["hasPhoto"] as? Int, 1, "hasPhoto == true must serialize to 1")
+        XCTAssertEqual(withoutPhoto["hasPhoto"] as? Int, 0, "hasPhoto == false must serialize to 0")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
@@ -148,14 +181,14 @@ class LocationAppTests: XCTestCase {
         return record
     }
 
-    private func makeItem(recordName: String?, locdescription: String = "test") throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"Q\"",
             "\"latitude\": \"0\"",
             "\"longitude\": \"0\"",
             "\"locdescription\": \"\(locdescription)\"",
             "\"active\": 0",
-            "\"hasPhoto\": false"
+            "\"hasPhoto\": \(hasPhoto)"
         ]
         if let recordName = recordName {
             fields.append("\"recordName\": \"\(recordName)\"")

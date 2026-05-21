@@ -160,18 +160,24 @@ class LocationsCK : Locations, SettingsService {
         }
     }
     
-    fileprivate func uploadChanges(_ records: [CKRecord]) {
+    fileprivate func uploadChanges(_ items: [LocationRecordCacheItem]) {
         let size = 200
         var page = 1
         var total = 0
-        print("Prepare to save \(records.count) records.")
-        while (records.count > total) {
-            let count = records.count >= page * size ? size : records.count - total
-            let slice = Array(records[total...total + count - 1])
+        print("Prepare to save \(items.count) records.")
+        while (items.count > total) {
+            let count = items.count >= page * size ? size : items.count - total
+            let slice = Array(items[total...total + count - 1])
             total = page * size
             page += 1
-   
-            let operation = CKModifyRecordsOperation(recordsToSave: slice, recordIDsToDelete: nil)
+
+            // Build the CKRecords for this page. Days 5-7 replace this straight
+            // item.to() conversion with a fetch-merge against the current server
+            // records; for now this is a behavior-preserving move of the
+            // conversion out of saveChanges() so the paging loop owns it.
+            let recordsToSave = slice.map { $0.to() }
+
+            let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
             operation.savePolicy = .allKeys
             operation.modifyRecordsResultBlock = { result in
                 switch result {
@@ -189,12 +195,8 @@ class LocationsCK : Locations, SettingsService {
             DispatchQueue.global(qos: .background).async {
                 self.semaphore.wait()
                 if (!self.cache!.changes.isEmpty) {
-                    var records = [CKRecord]()
-                    for item in self.cache!.changes {
-                        records.append(item.to())
-                    }
-                    
-                    self.uploadChanges(records)
+                    let items = Array(self.cache!.changes)
+                    self.uploadChanges(items)
                     self.cache?.changes.removeAll()
                     self.cache?.save()
                     self.semaphore.signal()
