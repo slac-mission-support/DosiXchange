@@ -160,6 +160,28 @@ class LocationsCK : Locations, SettingsService {
         }
     }
     
+    // Fetches the current server-side records for the given IDs. Days 6-7 consume
+    // the returned dictionary to skip already-collected records and to apply local
+    // fields onto a fetched base for .ifServerRecordUnchanged saves. Day 5 wires
+    // the fetch into uploadChanges but leaves save semantics unchanged.
+    fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> [CKRecord.ID: CKRecord] {
+        guard !ids.isEmpty else { return [:] }
+        var fetched: [CKRecord.ID: CKRecord] = [:]
+        let waitSemaphore = DispatchSemaphore(value: 0)
+        let fetchOp = CKFetchRecordsOperation(recordIDs: ids)
+        fetchOp.qualityOfService = .userInitiated
+        fetchOp.perRecordResultBlock = { id, result in
+            switch result {
+            case .success(let record): fetched[id] = record
+            case .failure(let error): print("Fetch failed for \(id.recordName): \(error.localizedDescription)")
+            }
+        }
+        fetchOp.fetchRecordsResultBlock = { _ in waitSemaphore.signal() }
+        self.database.add(fetchOp)
+        waitSemaphore.wait()
+        return fetched
+    }
+
     fileprivate func uploadChanges(_ items: [LocationRecordCacheItem]) {
         let size = 200
         var page = 1
@@ -171,10 +193,13 @@ class LocationsCK : Locations, SettingsService {
             total = page * size
             page += 1
 
-            // Build the CKRecords for this page. Days 5-7 replace this straight
-            // item.to() conversion with a fetch-merge against the current server
-            // records; for now this is a behavior-preserving move of the
-            // conversion out of saveChanges() so the paging loop owns it.
+            // Fetch the current server records for this page. Day 5 logs the
+            // result; Days 6-7 use it to skip already-collected records and to
+            // apply local fields onto the fetched base for conflict-safe saves.
+            let ids = slice.compactMap { $0.recordName }.map { CKRecord.ID(recordName: $0) }
+            let serverRecords = fetchServerRecords(ids)
+            print("Fetched \(serverRecords.count) server records for page of \(slice.count).")
+
             let recordsToSave = slice.map { $0.to() }
 
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
