@@ -17,13 +17,14 @@ class Dosimeter {
     var collected: String?
     var createdDate:Date
     
-    init(item: LocationRecordCacheItem) {
+    init?(item: LocationRecordCacheItem) {
+        guard let createdDate = item.createdDate else { return nil }
         qrCode = item.QRCode
         self.moderator = Dosimeter.fromInt(item.moderator)
         self.collected = Dosimeter.fromInt(item.collectedFlag)
         dosinumber = item.dosinumber
         cycleDate = item.cycleDate
-        createdDate = item.createdDate!
+        self.createdDate = createdDate
     }
     
     private static func fromInt(_ value:Int64?) -> String {
@@ -73,7 +74,7 @@ class DosimetersViewController: UIViewController {
     }
     
     fileprivate func processItems(_ items: [LocationRecordCacheItem]) {
-        var dosis = items.map({ item in Dosimeter(item: item)})
+        var dosis = items.compactMap({ item in Dosimeter(item: item) })
         dosis.sort {
             if $0.qrCode == $1.qrCode {
                 return $0.createdDate > $1.createdDate
