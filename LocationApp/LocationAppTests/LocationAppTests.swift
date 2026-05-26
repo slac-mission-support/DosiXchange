@@ -152,6 +152,51 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(withoutPhoto["hasPhoto"] as? Int, 0, "hasPhoto == false must serialize to 0")
     }
 
+    // MARK: - shouldSkipSave decision (Day 6)
+
+    // shouldSkipSave is the pure decision uploadChanges consults inside its
+    // paging loop to skip records the server already shows as collected on the
+    // same cycle. The fetched-but-unused dictionary from Day 5 now drives this.
+
+    func test_shouldSkipSave_returnsFalseWhenServerRecordMissing() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipSave(item: item, serverRecord: nil),
+                       "Without a server record we can't make a skip decision; let the save proceed and rely on CloudKit's own conflict handling")
+    }
+
+    func test_shouldSkipSave_returnsTrueWhenServerCollectedOnSameCycle() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        let server = makeServerRecord(collectedFlag: 1, cycleDate: "1-1-2026")
+
+        XCTAssertTrue(LocationsCK.shouldSkipSave(item: item, serverRecord: server),
+                      "Server is source of truth: a collected record on the same cycle must not be overwritten by a stale local edit")
+    }
+
+    func test_shouldSkipSave_returnsFalseWhenServerNotCollected() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        let server = makeServerRecord(collectedFlag: 0, cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipSave(item: item, serverRecord: server),
+                       "An uncollected server record is exactly what the local edit means to update; do not skip")
+    }
+
+    func test_shouldSkipSave_returnsFalseWhenServerCollectedOnPriorCycle() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        let server = makeServerRecord(collectedFlag: 1, cycleDate: "7-1-2025")
+
+        XCTAssertFalse(LocationsCK.shouldSkipSave(item: item, serverRecord: server),
+                       "Collected-flag is per-cycle; a prior-cycle collection must not block this cycle's save")
+    }
+
+    func test_shouldSkipSave_returnsFalseWhenServerMissingCollectedFlag() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        let server = makeServerRecord(collectedFlag: nil, cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipSave(item: item, serverRecord: server),
+                       "Without server-side collected status we cannot conclude collected; do not skip")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
@@ -181,7 +226,7 @@ class LocationAppTests: XCTestCase {
         return record
     }
 
-    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"Q\"",
             "\"latitude\": \"0\"",
@@ -193,8 +238,25 @@ class LocationAppTests: XCTestCase {
         if let recordName = recordName {
             fields.append("\"recordName\": \"\(recordName)\"")
         }
+        if let cycleDate = cycleDate {
+            fields.append("\"cycleDate\": \"\(cycleDate)\"")
+        }
         let json = "{ \(fields.joined(separator: ", ")) }"
         return try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
+    }
+
+    /// A minimal "server-side" CKRecord populated only with the fields
+    /// shouldSkipSave reads. Pass nil to omit a field entirely (CKRecord
+    /// returns nil for unset keys, which is the case we want to assert on).
+    private func makeServerRecord(collectedFlag: Int64?, cycleDate: String?) -> CKRecord {
+        let record = CKRecord(recordType: "Location")
+        if let collectedFlag = collectedFlag {
+            record.setValue(collectedFlag, forKey: "collectedFlag")
+        }
+        if let cycleDate = cycleDate {
+            record.setValue(cycleDate, forKey: "cycleDate")
+        }
+        return record
     }
 
     private func removeCacheFileOnDisk() {

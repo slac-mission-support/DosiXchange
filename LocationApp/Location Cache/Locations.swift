@@ -160,10 +160,23 @@ class LocationsCK : Locations, SettingsService {
         }
     }
     
-    // Fetches the current server-side records for the given IDs. Days 6-7 consume
-    // the returned dictionary to skip already-collected records and to apply local
-    // fields onto a fetched base for .ifServerRecordUnchanged saves. Day 5 wires
-    // the fetch into uploadChanges but leaves save semantics unchanged.
+    // Pure decision used by uploadChanges: skip saving when the server already
+    // shows the record collected on the same cycle. The server is the source of
+    // truth — overwriting a server-side collected record with a stale local one
+    // would silently revert a completed field action.
+    // Internal (not private) so LocationAppTests can drive the decision matrix
+    // offline; same exception precedent as Day 3's bulkSyncDesiredKeys.
+    internal static func shouldSkipSave(item: LocationRecordCacheItem, serverRecord: CKRecord?) -> Bool {
+        guard let serverRecord = serverRecord else { return false }
+        guard let serverCollected = serverRecord["collectedFlag"] as? Int64,
+              let serverCycle = serverRecord["cycleDate"] as? String else { return false }
+        return serverCollected == 1 && serverCycle == item.cycleDate
+    }
+
+    // Fetches the current server-side records for the given IDs. Day 6 uses
+    // the returned dictionary to skip already-collected records; Day 7 will
+    // additionally apply local fields onto the fetched base for
+    // .ifServerRecordUnchanged saves.
     fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> [CKRecord.ID: CKRecord] {
         guard !ids.isEmpty else { return [:] }
         var fetched: [CKRecord.ID: CKRecord] = [:]
@@ -193,20 +206,34 @@ class LocationsCK : Locations, SettingsService {
             total = page * size
             page += 1
 
-            // Fetch the current server records for this page. Day 5 logs the
-            // result; Days 6-7 use it to skip already-collected records and to
-            // apply local fields onto the fetched base for conflict-safe saves.
             let ids = slice.compactMap { $0.recordName }.map { CKRecord.ID(recordName: $0) }
             let serverRecords = fetchServerRecords(ids)
             print("Fetched \(serverRecords.count) server records for page of \(slice.count).")
 
-            let recordsToSave = slice.map { $0.to() }
+            var recordsToSave: [CKRecord] = []
+            for item in slice {
+                guard let recordName = item.recordName else { continue }
+                let id = CKRecord.ID(recordName: recordName)
+                if LocationsCK.shouldSkipSave(item: item, serverRecord: serverRecords[id]) {
+                    print("Skipping save for \(recordName): already collected on server for cycle \(item.cycleDate ?? "nil")")
+                    continue
+                }
+                recordsToSave.append(item.to())
+            }
+
+            if recordsToSave.isEmpty { continue }
 
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
             operation.savePolicy = .allKeys
+            operation.qualityOfService = .userInitiated
+            operation.perRecordSaveBlock = { id, result in
+                if case .failure(let error) = result {
+                    print("Per-record save failed for \(id.recordName): \(error.localizedDescription)")
+                }
+            }
             operation.modifyRecordsResultBlock = { result in
                 switch result {
-                    case .success : print("Saved locations.")
+                    case .success : print("Saved \(recordsToSave.count) location records.")
                     case .failure(let error) :print(error.localizedDescription)
                 }
             }
