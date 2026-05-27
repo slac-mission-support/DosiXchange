@@ -173,10 +173,11 @@ class LocationsCK : Locations, SettingsService {
         return serverCollected == 1 && serverCycle == item.cycleDate
     }
 
-    // Fetches the current server-side records for the given IDs. Day 6 uses
-    // the returned dictionary to skip already-collected records; Day 7 will
-    // additionally apply local fields onto the fetched base for
-    // .ifServerRecordUnchanged saves.
+    // Fetches the current server-side records for the given IDs. uploadChanges
+    // uses the returned dictionary to (1) skip records the server already shows
+    // collected on the same cycle and (2) apply local fields onto the fetched
+    // base so .ifServerRecordUnchanged can detect mid-flight conflicts via the
+    // record's recordChangeTag.
     fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> [CKRecord.ID: CKRecord] {
         guard !ids.isEmpty else { return [:] }
         var fetched: [CKRecord.ID: CKRecord] = [:]
@@ -218,13 +219,24 @@ class LocationsCK : Locations, SettingsService {
                     print("Skipping save for \(recordName): already collected on server for cycle \(item.cycleDate ?? "nil")")
                     continue
                 }
-                recordsToSave.append(item.to())
+                if let serverRecord = serverRecords[id] {
+                    // Apply local fields onto the fetched record so the save carries
+                    // the server's recordChangeTag. .ifServerRecordUnchanged then
+                    // rejects this write if another device modified the record
+                    // between our fetch and save — the core of the concurrent-user fix.
+                    item.update(newRecord: serverRecord)
+                    recordsToSave.append(serverRecord)
+                }
+                else {
+                    // No record on server yet — first-time upload. No tag to preserve.
+                    recordsToSave.append(item.to())
+                }
             }
 
             if recordsToSave.isEmpty { continue }
 
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
-            operation.savePolicy = .allKeys
+            operation.savePolicy = .ifServerRecordUnchanged
             operation.qualityOfService = .userInitiated
             operation.perRecordSaveBlock = { id, result in
                 if case .failure(let error) = result {

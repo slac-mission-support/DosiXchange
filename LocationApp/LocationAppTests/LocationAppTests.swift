@@ -197,6 +197,69 @@ class LocationAppTests: XCTestCase {
                        "Without server-side collected status we cannot conclude collected; do not skip")
     }
 
+    // MARK: - apply-onto-fetched merge (Day 7)
+
+    // Day 7 flips uploadChanges' savePolicy from .allKeys to .ifServerRecordUnchanged
+    // and, for records that exist on the server, applies local fields onto the
+    // *fetched* CKRecord rather than building a fresh one via item.to(). This
+    // preserves the server's recordChangeTag so CloudKit can reject the save when
+    // another device modified the record between our fetch and save. These tests
+    // lock the merge semantics that the new save path depends on.
+
+    func test_update_overwritesServerFieldsWithItemFields() throws {
+        // A server record with the "before" state of every field update() writes.
+        let server = makeLocationRecord()
+        let item = try makeItem(recordName: "r1", locdescription: "north gate")
+        item.dosinumber = "D-NEW"
+        item.collectedFlag = 1
+        item.cycleDate = "1-1-2026"
+        item.moderator = 1
+        item.active = 0
+        item.mismatch = 1
+        item.modifiedBy = "spady"
+        item.reportGroup = "group-7"
+
+        item.update(newRecord: server)
+
+        XCTAssertEqual(server["locdescription"] as? String, "north gate")
+        XCTAssertEqual(server["QRCode"] as? String, "Q")
+        XCTAssertEqual(server["latitude"] as? String, "0")
+        XCTAssertEqual(server["longitude"] as? String, "0")
+        XCTAssertEqual(server["active"] as? Int64, 0)
+        XCTAssertEqual(server["dosinumber"] as? String, "D-NEW")
+        XCTAssertEqual(server["collectedFlag"] as? Int64, 1)
+        XCTAssertEqual(server["cycleDate"] as? String, "1-1-2026")
+        XCTAssertEqual(server["moderator"] as? Int64, 1)
+        XCTAssertEqual(server["mismatch"] as? Int64, 1)
+        XCTAssertEqual(server["modifiedBy"] as? String, "spady")
+        XCTAssertEqual(server["reportGroup"] as? String, "group-7")
+        XCTAssertEqual(server["hasPhoto"] as? Int, 0)
+    }
+
+    func test_update_preservesFetchedRecordID() throws {
+        // uploadChanges relies on update(newRecord:) mutating the *same* CKRecord
+        // object it was handed — that's what carries the fetched recordChangeTag
+        // through to the .ifServerRecordUnchanged save. If update() ever started
+        // returning a new record (or replacing recordID), the conflict check
+        // would silently fall back to a tag-less save.
+        let server = CKRecord(recordType: "Location",
+                              recordID: CKRecord.ID(recordName: "server-id-1"))
+        server.setValue("Q-OLD", forKey: "QRCode")
+        server.setValue("0", forKey: "latitude")
+        server.setValue("0", forKey: "longitude")
+        server.setValue("old", forKey: "locdescription")
+        server.setValue(Int64(0), forKey: "active")
+
+        let item = try makeItem(recordName: "client-cache-id", locdescription: "new")
+
+        item.update(newRecord: server)
+
+        XCTAssertEqual(server.recordID.recordName, "server-id-1",
+                       "update(newRecord:) must mutate the fetched record in place; it must not replace recordID with the item's recordName, or .ifServerRecordUnchanged loses the fetched tag")
+        XCTAssertEqual(server["locdescription"] as? String, "new",
+                       "Field values still flow from item onto the fetched record")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
