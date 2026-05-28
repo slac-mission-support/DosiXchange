@@ -260,6 +260,80 @@ class LocationAppTests: XCTestCase {
                        "Field values still flow from item onto the fetched record")
     }
 
+    // MARK: - shouldSkipLocalSave decision (Day 8)
+
+    // shouldSkipLocalSave is the local-write guardrail save(items:) consults before
+    // queuing an edit. It is the local mirror of shouldSkipSave: where shouldSkipSave
+    // trusts the fetched *server* record, this one trusts our own *cache* entry, so a
+    // record already known-collected for the current cycle never gets queued for
+    // upload in the first place.
+
+    func test_shouldSkipLocalSave_returnsFalseWhenNotCached() throws {
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipLocalSave(item: item, cached: nil),
+                       "A record we've never cached can't be a stale re-collect; let the save proceed")
+    }
+
+    func test_shouldSkipLocalSave_returnsTrueWhenCachedCollectedOnSameCycle() throws {
+        let cached = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        cached.collectedFlag = 1
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertTrue(LocationsCK.shouldSkipLocalSave(item: item, cached: cached),
+                      "A record our cache already shows collected this cycle is immutable until next cycle; drop the edit before it's queued")
+    }
+
+    func test_shouldSkipLocalSave_returnsFalseWhenCachedNotCollected() throws {
+        let cached = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+        cached.collectedFlag = 0
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipLocalSave(item: item, cached: cached),
+                       "An uncollected cached record is exactly what this edit means to update; do not skip")
+    }
+
+    func test_shouldSkipLocalSave_returnsFalseWhenCachedCollectedOnPriorCycle() throws {
+        let cached = try makeItem(recordName: "r1", cycleDate: "7-1-2025")
+        cached.collectedFlag = 1
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipLocalSave(item: item, cached: cached),
+                       "Collected-flag is per-cycle; a prior-cycle collection must not block this cycle's save")
+    }
+
+    func test_shouldSkipLocalSave_returnsFalseWhenCachedMissingCycle() throws {
+        let cached = try makeItem(recordName: "r1")
+        cached.collectedFlag = 1
+        let item = try makeItem(recordName: "r1", cycleDate: "1-1-2026")
+
+        XCTAssertFalse(LocationsCK.shouldSkipLocalSave(item: item, cached: cached),
+                       "Without a cached cycle we can't conclude same-cycle collection; do not skip")
+    }
+
+    // MARK: - Cache.location(forRecordName:) lookup (Day 8)
+
+    // The guardrail needs the current cache entry for a recordName without an O(n)
+    // scan; location(forRecordName:) reuses the same transient index add() maintains.
+
+    func test_cacheLocation_returnsAddedItem() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1", locdescription: "north gate"))
+
+        XCTAssertEqual(cache.location(forRecordName: "r1")?.locdescription, "north gate")
+        XCTAssertNil(cache.location(forRecordName: "missing"),
+                     "Unknown recordName must return nil, not a neighbouring record")
+    }
+
+    func test_cacheLocation_reflectsUpsert() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1", locdescription: "old"))
+        cache.add(try makeItem(recordName: "r1", locdescription: "new"))
+
+        XCTAssertEqual(cache.location(forRecordName: "r1")?.locdescription, "new",
+                       "add() upserts in place; the lookup must see the latest value at the indexed slot")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the

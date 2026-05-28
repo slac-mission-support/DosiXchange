@@ -124,14 +124,31 @@ class LocationsCK : Locations, SettingsService {
     func save(items: [LocationRecordCacheItem], completionHandler: (() -> Void)?) {
         DispatchQueue.global(qos: .background).async {
             self.semaphore.wait()
+            var queued = 0
             for item in items {
+                // Local guardrail: drop the edit if our own cache already shows this
+                // record collected for the same cycle. Catching it at the local-write
+                // boundary keeps a stale edit from ever being queued for upload — the
+                // local complement to uploadChanges' server-side skip (shouldSkipSave),
+                // which guards the same invariant against changes made on another
+                // device. See shouldSkipLocalSave for the decision.
+                let cached = item.recordName.flatMap { self.cache?.location(forRecordName: $0) }
+                if LocationsCK.shouldSkipLocalSave(item: item, cached: cached) {
+                    print("Skipping save for \(item.recordName ?? "?"): local cache shows collected for cycle \(cached?.cycleDate ?? "nil")")
+                    continue
+                }
                 self.reportGroupUpdate(item)
                 self.cache?.add(item)
                 self.cache?.addChange(item)
+                queued += 1
             }
-            self.cache?.save()
+            if queued > 0 {
+                self.cache?.save()
+            }
             self.semaphore.signal()
-            self.saveChanges()
+            if queued > 0 {
+                self.saveChanges()
+            }
             DispatchQueue.main.async {
                 completionHandler?()
             }
@@ -171,6 +188,19 @@ class LocationsCK : Locations, SettingsService {
         guard let serverCollected = serverRecord["collectedFlag"] as? Int64,
               let serverCycle = serverRecord["cycleDate"] as? String else { return false }
         return serverCollected == 1 && serverCycle == item.cycleDate
+    }
+
+    // Pure decision used by save(items:): the local complement to shouldSkipSave.
+    // Skip queuing an edit when our own cache already shows the record collected on
+    // the same cycle — once collected for a cycle a record is meant to be immutable
+    // until the next cycle, so re-saving it would only queue a stale upload. `cached`
+    // is the existing cache entry for this recordName (nil if we've never seen it).
+    // Internal (not private) so LocationAppTests can drive the decision matrix
+    // offline; same exception precedent as Day 3's bulkSyncDesiredKeys.
+    internal static func shouldSkipLocalSave(item: LocationRecordCacheItem, cached: LocationRecordCacheItem?) -> Bool {
+        guard let cached = cached else { return false }
+        guard cached.collectedFlag == 1, let cachedCycle = cached.cycleDate else { return false }
+        return cachedCycle == item.cycleDate
     }
 
     // Fetches the current server-side records for the given IDs. uploadChanges

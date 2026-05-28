@@ -63,6 +63,13 @@ class Cache: Codable {
         }
     }
     
+    // O(1) lookup by recordName via the same transient index add() maintains.
+    // Lets callers check the cached state of a record without an O(n) scan.
+    func location(forRecordName name: String) -> LocationRecordCacheItem? {
+        guard let i = locationIndex[name] else { return nil }
+        return locations[i]
+    }
+
     func addChange(_ item: LocationRecordCacheItem) {
         item.setValue(user, forKey: "modifiedBy")
         if let index = changes.firstIndex(where: { l in l.recordName == item.recordName}) {
