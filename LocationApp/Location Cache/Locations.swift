@@ -28,6 +28,8 @@ protocol Locations {
     func reset(_ loaded: @escaping  ((Int) -> Void))
     
     func fetch(id: String, completionHandler: @escaping (LocationRecordCacheItem?, Error?) -> Void)
+
+    var pendingChangeCount: Int { get }
 }
 
 class LocationsCK : Locations, SettingsService {
@@ -161,7 +163,17 @@ class LocationsCK : Locations, SettingsService {
         semaphore.signal()
         self.synchronize(loaded: loaded)
     }
-    
+
+    // Number of edits queued for upload but not yet synced. Read under the same
+    // semaphore every other cache mutation uses, so the count is consistent with
+    // a concurrent save/sync rather than a half-applied batch. Day 10's Reset Cache
+    // confirmation surfaces this to the user before clearing the cache.
+    var pendingChangeCount: Int {
+        semaphore.wait()
+        defer { semaphore.signal() }
+        return cache?.changes.count ?? 0
+    }
+
     private func reachable(_ : Reachability) {
         DispatchQueue.global(qos: .background).async {
             self.semaphore.wait()
