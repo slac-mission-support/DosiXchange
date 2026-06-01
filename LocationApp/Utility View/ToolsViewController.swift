@@ -124,12 +124,25 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     }
     
     @IBAction func resetCacheTouchUp(_ sender: Any) {
-        activityIndicator.startAnimating()
-        locations.reset { _ in
-            DispatchQueue.main.async {
-                self.activityIndicator.stopAnimating()
+        let pending = locations.pendingChangeCount
+        let pendingLine = pending > 0
+            ? "\n\nYou have \(pending) unsynced edit\(pending == 1 ? "" : "s") that will sync first."
+            : ""
+        let alert = UIAlertController(
+            title: "Reset Cache?",
+            message: "This will discard the local cache and reload all location data from CloudKit. Use this only if records appear out of sync.\(pendingLine)",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: "Reset", style: .destructive, handler: { _ in
+            self.activityIndicator.startAnimating()
+            self.locations.reset { _ in
+                DispatchQueue.main.async {
+                    self.activityIndicator.stopAnimating()
+                }
             }
-        }
+        }))
+        present(alert, animated: true)
     }
     
     //MARK:  Send Email
