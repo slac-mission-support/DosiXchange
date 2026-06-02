@@ -334,6 +334,35 @@ class LocationAppTests: XCTestCase {
                        "add() upserts in place; the lookup must see the latest value at the indexed slot")
     }
 
+    // MARK: - createdDateForSort (nil-safe ordering key)
+
+    func test_createdDateForSort_returnsCreatedDateWhenPresent() throws {
+        // 0 seconds since the reference date == 2001-01-01 00:00:00 UTC.
+        let item = try makeItem(recordName: "r1", createdDate: 0)
+        XCTAssertEqual(item.createdDate, Date(timeIntervalSinceReferenceDate: 0))
+        XCTAssertEqual(item.createdDateForSort, Date(timeIntervalSinceReferenceDate: 0),
+                       "When createdDate is set, the sort key must equal it exactly")
+    }
+
+    func test_createdDateForSort_fallsBackToDistantPastWhenNil() throws {
+        let item = try makeItem(recordName: "r1")
+        XCTAssertNil(item.createdDate, "Fixture without createdDate must decode to nil")
+        XCTAssertEqual(item.createdDateForSort, .distantPast,
+                       "A nil createdDate must sort as the oldest possible date, not crash")
+    }
+
+    func test_createdDateForSort_sortsNilLastInNewestFirstOrder() throws {
+        let newer = try makeItem(recordName: "r1", createdDate: 1000)
+        let older = try makeItem(recordName: "r2", createdDate: 0)
+        let undated = try makeItem(recordName: "r3")
+
+        // Mirrors the UI sort comparators: descending by createdDateForSort.
+        let sorted = [undated, older, newer].sorted { $0.createdDateForSort > $1.createdDateForSort }
+
+        XCTAssertEqual(sorted.map { $0.recordName }, ["r1", "r2", "r3"],
+                       "Newest first, with the nil-createdDate record sorted last")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
@@ -363,7 +392,7 @@ class LocationAppTests: XCTestCase {
         return record
     }
 
-    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"Q\"",
             "\"latitude\": \"0\"",
@@ -377,6 +406,11 @@ class LocationAppTests: XCTestCase {
         }
         if let cycleDate = cycleDate {
             fields.append("\"cycleDate\": \"\(cycleDate)\"")
+        }
+        // JSONDecoder's default .deferredToDate strategy decodes Date from a
+        // Double (seconds since the reference date), so callers pass an interval.
+        if let createdDate = createdDate {
+            fields.append("\"createdDate\": \(createdDate)")
         }
         let json = "{ \(fields.joined(separator: ", ")) }"
         return try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))

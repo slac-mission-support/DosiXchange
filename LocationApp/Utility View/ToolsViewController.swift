@@ -224,7 +224,7 @@ extension ToolsViewController {
         var items = locations.filter(by: filter)
         items.sort {
             if $0.QRCode == $1.QRCode {
-                return $0.createdDate! > $1.createdDate!
+                return $0.createdDateForSort > $1.createdDateForSort
             }
             return $0.QRCode < $1.QRCode
         }

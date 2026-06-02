@@ -589,7 +589,7 @@ extension ScannerViewController {  //queries
         locations.filter(by: { l in l.QRCode == variables.QRCode! && l.createdDate != nil}, completionHandler: { items in
             var litems = [LocationRecordCacheItem](items)
             litems.sort {
-                $0.createdDate! > $1.createdDate!
+                $0.createdDateForSort > $1.createdDateForSort
             }
             var lrecords = [CKRecord]()
             for item in litems {
@@ -635,7 +635,7 @@ extension ScannerViewController {  //queries
         locations.filter(by: { l in l.QRCode == tempQR && l.createdDate != nil}, completionHandler: {items in
             var litems = [LocationRecordCacheItem](items)
             litems.sort {
-                $0.createdDate! > $1.createdDate!
+                $0.createdDateForSort > $1.createdDateForSort
             }
             var lrecords = [CKRecord]()
             for item in litems {
@@ -974,6 +974,17 @@ extension ScannerViewController {  //alerts
                     label.text = "Please enter a location"
                     label.isHidden = false
                     self.present(alert, animated: true, completion: nil)
+                } else if variables.QRCode == nil {
+                    // Hardening (SOW V2 Rev 1): refuse to deploy a location whose
+                    // QR code never got captured. Saving here would persist the
+                    // "Nil QRCode" placeholder to CloudKit (see setValue below),
+                    // which can't be reconciled later. Bounce back to the scanner
+                    // so the field worker rescans the location QR code.
+                    let qrError = UIAlertController(title: "Location QR Code Missing", message: "The location QR code wasn't captured. Please scan the location QR code again before deploying.", preferredStyle: .alert)
+                    qrError.addAction(UIAlertAction(title: "OK", style: .default, handler: self.handlerCancel))
+                    DispatchQueue.main.async {
+                        self.present(qrError, animated: true, completion: nil)
+                    }
                 } else {
                     let description = text.replacingOccurrences(of: ",", with: "-")
                     let newRecord = CKRecord(recordType: "Location")

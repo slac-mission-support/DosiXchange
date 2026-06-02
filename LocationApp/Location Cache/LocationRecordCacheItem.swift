@@ -65,6 +65,16 @@ class LocationRecordCacheItem: Codable, LocationRecordDelegate {
         case QRCode, latitude, longitude, locdescription, active, dosinumber, collectedFlag, cycleDate, mismatch, moderator, creationDate, createdDate, modifiedDate, modificationDate, recordName, modifiedBy, reportGroup, hasPhoto
     }
 
+    // Nil-safe ordering key for createdDate. CloudKit can return a nil
+    // createdDate for very old / partially-populated records; the UI sorts
+    // newest-first and used to force-unwrap createdDate, which crashed on
+    // those records. Treating nil as the oldest possible date keeps the same
+    // newest-first ordering (nil lands last) without the force-unwrap — the
+    // sort sibling of the skip-nil Dosimeter init (commit 931ccc2).
+    var createdDateForSort: Date {
+        return createdDate ?? .distantPast
+    }
+
     // Location Record Metadata
     
     // Initialize with a CloudKit Record

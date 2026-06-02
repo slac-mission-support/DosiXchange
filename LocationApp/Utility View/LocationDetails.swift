@@ -326,7 +326,7 @@ extension LocationDetails: UITableViewDelegate, UITableViewDataSource {
         
         var items = locations.filter(by: { l in l.QRCode == QRCode && l.createdDate != nil })
         items.sort {
-            $0.createdDate! > $1.createdDate!
+            $0.createdDateForSort > $1.createdDateForSort
         }
         for item in items {
             recordFetchedBlock(record: item)
