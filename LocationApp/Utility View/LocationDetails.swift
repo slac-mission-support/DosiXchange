@@ -424,23 +424,30 @@ extension LocationDetails: UITextFieldDelegate {
         //        dispatchGroup.enter()
         
         let text = pDescription.text?.replacingOccurrences(of: ",", with: "-")
-        
+
+        // Edit a distinct copy, not the cache's live record. popupRecord aliases
+        // the cached LocationRecordCacheItem; mutating it in place set collectedFlag
+        // before LocationsCK.save's already-collected guard ran, so the guard
+        // compared the record against itself and silently dropped a genuine collect
+        // (QA-1 DEFECT-1). Saving a copy lets the guard see the true prior state.
+        let item = (popupRecord as! LocationRecordCacheItem).copy()
+
         //set new record information
-        popupRecord.setValue(text, forKey: "locdescription")
-        popupRecord.setValue(pLatitude.text, forKey: "latitude")
-        popupRecord.setValue(pLongitude.text, forKey: "longitude")
-        popupRecord.setValue(pDosimeter.text, forKey: "dosinumber")
-        popupRecord.setValue(moderator, forKey: "moderator")
-        popupRecord.setValue(pReportGroup.text, forKey: "reportGroup")
+        item.setValue(text, forKey: "locdescription")
+        item.setValue(pLatitude.text, forKey: "latitude")
+        item.setValue(pLongitude.text, forKey: "longitude")
+        item.setValue(pDosimeter.text, forKey: "dosinumber")
+        item.setValue(moderator, forKey: "moderator")
+        item.setValue(pReportGroup.text, forKey: "reportGroup")
         if pDosimeter.text != "" {
-            popupRecord.setValue(pCycleDate.text, forKey: "cycleDate")
-            popupRecord.setValue(collected, forKey: "collectedFlag")
-            popupRecord.setValue(mismatch, forKey: "mismatch")
+            item.setValue(pCycleDate.text, forKey: "cycleDate")
+            item.setValue(collected, forKey: "collectedFlag")
+            item.setValue(mismatch, forKey: "mismatch")
         }
         //not handled if dosimeter number is empty.  Therefore can't set collected flag.
-        
+
         activityIndicator.startAnimating()
-        locations.save(item: popupRecord as! LocationRecordCacheItem, completionHandler: { self.activityIndicator.stopAnimating() })
+        locations.save(item: item, completionHandler: { self.activityIndicator.stopAnimating() })
     } //end saveActiveStatus
     
     func setPopupDetails(record: LocationRecordDelegate) {

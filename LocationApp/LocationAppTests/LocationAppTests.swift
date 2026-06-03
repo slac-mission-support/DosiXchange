@@ -392,6 +392,30 @@ class LocationAppTests: XCTestCase {
         return record
     }
 
+    // copy() must produce a DISTINCT instance with the same field values, and
+    // mutating the copy must not touch the original. This is the invariant the
+    // edit popup relies on so LocationsCK.save's already-collected guard sees the
+    // record's true prior state instead of an in-place-mutated alias (QA-1 DEFECT-1):
+    // before the fix the popup edited the cached record in place, flipping
+    // collectedFlag to 1 before the guard ran, so a genuine collect was skipped.
+    func test_copy_isDistinctInstanceAndDoesNotAliasOriginal() throws {
+        let original = try makeItem(recordName: "R1", cycleDate: "1-1-2026")
+        original.collectedFlag = 0
+        original.dosinumber = "QA000000001"
+
+        let copy = original.copy()
+
+        XCTAssertFalse(copy === original, "copy must be a distinct instance")
+        XCTAssertEqual(copy.recordName, "R1")
+        XCTAssertEqual(copy.cycleDate, "1-1-2026")
+        XCTAssertEqual(copy.collectedFlag, 0)
+        XCTAssertEqual(copy.dosinumber, "QA000000001")
+
+        // Mutating the copy (as the popup does on a collect) must not leak back.
+        copy.collectedFlag = 1
+        XCTAssertEqual(original.collectedFlag, 0, "copy must not alias the original")
+    }
+
     private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"Q\"",
