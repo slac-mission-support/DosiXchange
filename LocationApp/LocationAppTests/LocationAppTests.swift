@@ -363,6 +363,23 @@ class LocationAppTests: XCTestCase {
                        "Newest first, with the nil-createdDate record sorted last")
     }
 
+    // MARK: - buildDateString (SOW 2.4: auto-derived Tools build date)
+
+    func test_buildDateString_formatsAsMonthCommaYear() {
+        // 2023-05-15 12:00 UTC — mid-month, so no timezone boundary ambiguity.
+        var components = DateComponents()
+        components.year = 2023
+        components.month = 5
+        components.day = 15
+        components.hour = 12
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let date = calendar.date(from: components)!
+
+        // Matches the "May, 2023" label this replaces (en_US test environment).
+        XCTAssertEqual(ToolsViewController.buildDateString(from: date), "May, 2023")
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
