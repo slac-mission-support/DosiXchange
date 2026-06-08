@@ -40,7 +40,6 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
     @IBOutlet weak var buildDateLabel: UILabel!
     @IBOutlet weak var button1: UIButton!
-    @IBOutlet weak var button2: UIButton!
     @IBOutlet weak var button3: UIButton!
     @IBOutlet weak var resetCacheButton: UIButton!
     @IBOutlet weak var dosimeters: UIButton!
@@ -63,7 +62,6 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
 
         //format buttons
         addBorderToButton(button: button1)
-        addBorderToButton(button: button2)
         addBorderToButton(button: button3)
         addBorderToButton(button: resetCacheButton)
         addBorderToButton(button: dosimeters)

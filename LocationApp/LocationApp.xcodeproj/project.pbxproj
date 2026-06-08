@@ -19,7 +19,6 @@
 		5AC96E102A2E07330022068C /* BackupLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC96E0F2A2E07330022068C /* BackupLocations.swift */; };
 		5AC96E122A2E09F10022068C /* RestoreLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC96E112A2E09F10022068C /* RestoreLocation.swift */; };
 		5C7925A122DE9B1900B981B2 /* LocationDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7925A022DE9B1900B981B2 /* LocationDetails.swift */; };
-		5C941E5522D93335008C9B3E /* LocationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C941E5422D93335008C9B3E /* LocationViewController.swift */; };
 		5CF01FDE22D92F19004604BC /* ToolsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF01FDD22D92F19004604BC /* ToolsViewController.swift */; };
 		5CFF888B22CAA5B700611F60 /* ActiveLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */; };
 		5E4D12742A2776E9002E4D91 /* Slac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4D12732A2776E9002E4D91 /* Slac.swift */; };
@@ -92,7 +91,6 @@
 		5AC96E0F2A2E07330022068C /* BackupLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupLocations.swift; sourceTree = "<group>"; };
 		5AC96E112A2E09F10022068C /* RestoreLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreLocation.swift; sourceTree = "<group>"; };
 		5C7925A022DE9B1900B981B2 /* LocationDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationDetails.swift; sourceTree = "<group>"; };
-		5C941E5422D93335008C9B3E /* LocationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationViewController.swift; sourceTree = "<group>"; };
 		5CF01FDD22D92F19004604BC /* ToolsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsViewController.swift; sourceTree = "<group>"; };
 		5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveLocations.swift; sourceTree = "<group>"; };
 		5E4D12732A2776E9002E4D91 /* Slac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Slac.swift; sourceTree = "<group>"; };
@@ -320,7 +318,6 @@
 			isa = PBXGroup;
 			children = (
 				5CF01FDD22D92F19004604BC /* ToolsViewController.swift */,
-				5C941E5422D93335008C9B3E /* LocationViewController.swift */,
 				84571FE4258FE29C009AC936 /* BriefCase.swift */,
 				5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */,
 				5C7925A022DE9B1900B981B2 /* LocationDetails.swift */,
@@ -533,7 +530,6 @@
 				5A38B45C2A5D790700489795 /* PhotoViewController.swift in Sources */,
 				449A7E9D271341B2005AF1F7 /* LocationRecordCacheItem.swift in Sources */,
 				846606C121AA3CA00049814C /* ReadWriteText.swift in Sources */,
-				5C941E5522D93335008C9B3E /* LocationViewController.swift in Sources */,
 				8487FE3021A8F9C700CC62E8 /* StartupViewController.swift in Sources */,
 				5E4D12742A2776E9002E4D91 /* Slac.swift in Sources */,
 				5A5EFD742A306ED500547EB8 /* SettingsService.swift in Sources */,
