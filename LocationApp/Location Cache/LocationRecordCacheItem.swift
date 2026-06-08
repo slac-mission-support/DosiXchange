@@ -65,6 +65,16 @@ class LocationRecordCacheItem: Codable, LocationRecordDelegate {
         case QRCode, latitude, longitude, locdescription, active, dosinumber, collectedFlag, cycleDate, mismatch, moderator, creationDate, createdDate, modifiedDate, modificationDate, recordName, modifiedBy, reportGroup, hasPhoto
     }
 
+    // Nil-safe ordering key for createdDate. CloudKit can return a nil
+    // createdDate for very old / partially-populated records; the UI sorts
+    // newest-first and used to force-unwrap createdDate, which crashed on
+    // those records. Treating nil as the oldest possible date keeps the same
+    // newest-first ordering (nil lands last) without the force-unwrap — the
+    // sort sibling of the skip-nil Dosimeter init (commit 931ccc2).
+    var createdDateForSort: Date {
+        return createdDate ?? .distantPast
+    }
+
     // Location Record Metadata
     
     // Initialize with a CloudKit Record
@@ -160,7 +170,41 @@ class LocationRecordCacheItem: Codable, LocationRecordDelegate {
         // set the record name
         self.recordName = record.recordID.recordName
  }
-    
+
+    // Copy initializer. Produces a distinct instance with the same field values
+    // (including photo and recordName), tolerating nil optionals — unlike
+    // init?(withRecord:), which requires dosinumber/collectedFlag/cycleDate and
+    // would reject an undeployed location. The edit popup uses this to save a
+    // copy instead of mutating the cache's live record in place: that aliasing
+    // made LocationsCK.save's already-collected guard compare the record against
+    // itself and silently drop a genuine collect (QA-1 DEFECT-1).
+    init(copying other: LocationRecordCacheItem) {
+        QRCode = other.QRCode
+        latitude = other.latitude
+        longitude = other.longitude
+        locdescription = other.locdescription
+        active = other.active
+        dosinumber = other.dosinumber
+        collectedFlag = other.collectedFlag
+        cycleDate = other.cycleDate
+        mismatch = other.mismatch
+        moderator = other.moderator
+        creationDate = other.creationDate
+        createdDate = other.createdDate
+        modifiedDate = other.modifiedDate
+        modificationDate = other.modificationDate
+        recordName = other.recordName
+        modifiedBy = other.modifiedBy
+        reportGroup = other.reportGroup
+        hasPhoto = other.hasPhoto
+        photo = other.photo
+    }
+
+    // Convenience wrapper around init(copying:) for a distinct duplicate.
+    func copy() -> LocationRecordCacheItem {
+        return LocationRecordCacheItem(copying: self)
+    }
+
     // Subscript operator overload used to access properties.
     subscript(key: String) -> CKRecordValue? {
         get {

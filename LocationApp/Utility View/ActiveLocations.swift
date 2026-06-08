@@ -167,7 +167,7 @@ extension ActiveLocations : UIViewControllerTransitioningDelegate{
    } //end func
         
     func addLocation(_ records: [LocationRecordCacheItem]) {
-        if let item = records.max(by: { $0.createdDate! < $1.createdDate! }) {
+        if let item = records.max(by: { $0.createdDateForSort < $1.createdDateForSort }) {
             let flag = item.active == 1 ? 0 : 1
             displayInfo[flag].append((item, item.QRCode, item.locdescription))
         }

@@ -278,7 +278,7 @@
                                     <segue destination="BYZ-38-t0r" kind="presentation" id="cs9-V2-lMJ"/>
                                 </connections>
                             </button>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="May, 2023" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="3FX-rC-9sw">
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Build date" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="3FX-rC-9sw">
                                 <rect key="frame" x="180.33333333333334" y="832" width="67.666666666666657" height="17"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                 <color key="textColor" white="0.66666666666666663" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -344,6 +344,7 @@
                     </view>
                     <connections>
                         <outlet property="activityIndicator" destination="12k-op-bR2" id="Xfh-4i-zsU"/>
+                        <outlet property="buildDateLabel" destination="3FX-rC-9sw" id="BDt-Lb-9sw"/>
                         <outlet property="button1" destination="P1C-rk-auY" id="9O8-Dx-vXv"/>
                         <outlet property="button2" destination="f4q-J5-UJn" id="iTU-a5-n1X"/>
                         <outlet property="button3" destination="iL3-Xk-1J0" id="GOc-1P-xTC"/>

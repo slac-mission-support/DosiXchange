@@ -28,6 +28,8 @@ protocol Locations {
     func reset(_ loaded: @escaping  ((Int) -> Void))
     
     func fetch(id: String, completionHandler: @escaping (LocationRecordCacheItem?, Error?) -> Void)
+
+    var pendingChangeCount: Int { get }
 }
 
 class LocationsCK : Locations, SettingsService {
@@ -124,14 +126,31 @@ class LocationsCK : Locations, SettingsService {
     func save(items: [LocationRecordCacheItem], completionHandler: (() -> Void)?) {
         DispatchQueue.global(qos: .background).async {
             self.semaphore.wait()
+            var queued = 0
             for item in items {
+                // Local guardrail: drop the edit if our own cache already shows this
+                // record collected for the same cycle. Catching it at the local-write
+                // boundary keeps a stale edit from ever being queued for upload — the
+                // local complement to uploadChanges' server-side skip (shouldSkipSave),
+                // which guards the same invariant against changes made on another
+                // device. See shouldSkipLocalSave for the decision.
+                let cached = item.recordName.flatMap { self.cache?.location(forRecordName: $0) }
+                if LocationsCK.shouldSkipLocalSave(item: item, cached: cached) {
+                    print("Skipping save for \(item.recordName ?? "?"): local cache shows collected for cycle \(cached?.cycleDate ?? "nil")")
+                    continue
+                }
                 self.reportGroupUpdate(item)
                 self.cache?.add(item)
                 self.cache?.addChange(item)
+                queued += 1
             }
-            self.cache?.save()
+            if queued > 0 {
+                self.cache?.save()
+            }
             self.semaphore.signal()
-            self.saveChanges()
+            if queued > 0 {
+                self.saveChanges()
+            }
             DispatchQueue.main.async {
                 completionHandler?()
             }
@@ -144,7 +163,17 @@ class LocationsCK : Locations, SettingsService {
         semaphore.signal()
         self.synchronize(loaded: loaded)
     }
-    
+
+    // Number of edits queued for upload but not yet synced. Read under the same
+    // semaphore every other cache mutation uses, so the count is consistent with
+    // a concurrent save/sync rather than a half-applied batch. Day 10's Reset Cache
+    // confirmation surfaces this to the user before clearing the cache.
+    var pendingChangeCount: Int {
+        semaphore.wait()
+        defer { semaphore.signal() }
+        return cache?.changes.count ?? 0
+    }
+
     private func reachable(_ : Reachability) {
         DispatchQueue.global(qos: .background).async {
             self.semaphore.wait()
@@ -160,22 +189,105 @@ class LocationsCK : Locations, SettingsService {
         }
     }
     
-    fileprivate func uploadChanges(_ records: [CKRecord]) {
-        let size = 400
+    // Pure decision used by uploadChanges: skip saving when the server already
+    // shows the record collected on the same cycle. The server is the source of
+    // truth — overwriting a server-side collected record with a stale local one
+    // would silently revert a completed field action.
+    // Internal (not private) so LocationAppTests can drive the decision matrix
+    // offline; same exception precedent as Day 3's bulkSyncDesiredKeys.
+    internal static func shouldSkipSave(item: LocationRecordCacheItem, serverRecord: CKRecord?) -> Bool {
+        guard let serverRecord = serverRecord else { return false }
+        guard let serverCollected = serverRecord["collectedFlag"] as? Int64,
+              let serverCycle = serverRecord["cycleDate"] as? String else { return false }
+        return serverCollected == 1 && serverCycle == item.cycleDate
+    }
+
+    // Pure decision used by save(items:): the local complement to shouldSkipSave.
+    // Skip queuing an edit when our own cache already shows the record collected on
+    // the same cycle — once collected for a cycle a record is meant to be immutable
+    // until the next cycle, so re-saving it would only queue a stale upload. `cached`
+    // is the existing cache entry for this recordName (nil if we've never seen it).
+    // Internal (not private) so LocationAppTests can drive the decision matrix
+    // offline; same exception precedent as Day 3's bulkSyncDesiredKeys.
+    internal static func shouldSkipLocalSave(item: LocationRecordCacheItem, cached: LocationRecordCacheItem?) -> Bool {
+        guard let cached = cached else { return false }
+        guard cached.collectedFlag == 1, let cachedCycle = cached.cycleDate else { return false }
+        return cachedCycle == item.cycleDate
+    }
+
+    // Fetches the current server-side records for the given IDs. uploadChanges
+    // uses the returned dictionary to (1) skip records the server already shows
+    // collected on the same cycle and (2) apply local fields onto the fetched
+    // base so .ifServerRecordUnchanged can detect mid-flight conflicts via the
+    // record's recordChangeTag.
+    fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> [CKRecord.ID: CKRecord] {
+        guard !ids.isEmpty else { return [:] }
+        var fetched: [CKRecord.ID: CKRecord] = [:]
+        let waitSemaphore = DispatchSemaphore(value: 0)
+        let fetchOp = CKFetchRecordsOperation(recordIDs: ids)
+        fetchOp.qualityOfService = .userInitiated
+        fetchOp.perRecordResultBlock = { id, result in
+            switch result {
+            case .success(let record): fetched[id] = record
+            case .failure(let error): print("Fetch failed for \(id.recordName): \(error.localizedDescription)")
+            }
+        }
+        fetchOp.fetchRecordsResultBlock = { _ in waitSemaphore.signal() }
+        self.database.add(fetchOp)
+        waitSemaphore.wait()
+        return fetched
+    }
+
+    fileprivate func uploadChanges(_ items: [LocationRecordCacheItem]) {
+        let size = 200
         var page = 1
         var total = 0
-        print("Prepare to save \(records.count) records.")
-        while (records.count > total) {
-            let count = records.count >= page * size ? size : records.count - total
-            let slice = Array(records[total...total + count - 1])
+        print("Prepare to save \(items.count) records.")
+        while (items.count > total) {
+            let count = items.count >= page * size ? size : items.count - total
+            let slice = Array(items[total...total + count - 1])
             total = page * size
             page += 1
-   
-            let operation = CKModifyRecordsOperation(recordsToSave: slice, recordIDsToDelete: nil)
-            operation.savePolicy = .allKeys
+
+            let ids = slice.compactMap { $0.recordName }.map { CKRecord.ID(recordName: $0) }
+            let serverRecords = fetchServerRecords(ids)
+            print("Fetched \(serverRecords.count) server records for page of \(slice.count).")
+
+            var recordsToSave: [CKRecord] = []
+            for item in slice {
+                guard let recordName = item.recordName else { continue }
+                let id = CKRecord.ID(recordName: recordName)
+                if LocationsCK.shouldSkipSave(item: item, serverRecord: serverRecords[id]) {
+                    print("Skipping save for \(recordName): already collected on server for cycle \(item.cycleDate ?? "nil")")
+                    continue
+                }
+                if let serverRecord = serverRecords[id] {
+                    // Apply local fields onto the fetched record so the save carries
+                    // the server's recordChangeTag. .ifServerRecordUnchanged then
+                    // rejects this write if another device modified the record
+                    // between our fetch and save — the core of the concurrent-user fix.
+                    item.update(newRecord: serverRecord)
+                    recordsToSave.append(serverRecord)
+                }
+                else {
+                    // No record on server yet — first-time upload. No tag to preserve.
+                    recordsToSave.append(item.to())
+                }
+            }
+
+            if recordsToSave.isEmpty { continue }
+
+            let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
+            operation.savePolicy = .ifServerRecordUnchanged
+            operation.qualityOfService = .userInitiated
+            operation.perRecordSaveBlock = { id, result in
+                if case .failure(let error) = result {
+                    print("Per-record save failed for \(id.recordName): \(error.localizedDescription)")
+                }
+            }
             operation.modifyRecordsResultBlock = { result in
                 switch result {
-                    case .success : print("Saved locations.")
+                    case .success : print("Saved \(recordsToSave.count) location records.")
                     case .failure(let error) :print(error.localizedDescription)
                 }
             }
@@ -189,12 +301,8 @@ class LocationsCK : Locations, SettingsService {
             DispatchQueue.global(qos: .background).async {
                 self.semaphore.wait()
                 if (!self.cache!.changes.isEmpty) {
-                    var records = [CKRecord]()
-                    for item in self.cache!.changes {
-                        records.append(item.to())
-                    }
-                    
-                    self.uploadChanges(records)
+                    let items = Array(self.cache!.changes)
+                    self.uploadChanges(items)
                     self.cache?.changes.removeAll()
                     self.cache?.save()
                     self.semaphore.signal()
@@ -262,10 +370,22 @@ class LocationsCK : Locations, SettingsService {
         })
     }
     
+    // Fields LocationRecordCacheItem(withRecord:) reads, minus the heavy CKAsset.
+    // Photos are fetched lazily via Locations.fetch(id:) when the user opens the
+    // detail or photo view, so excluding "photo" from bulk sync drops the biggest
+    // per-record payload from the initial download.
+    // Internal (not private) so unit tests can verify the field set.
+    static let bulkSyncDesiredKeys: [String] = [
+        "QRCode", "latitude", "longitude", "locdescription", "active",
+        "dosinumber", "collectedFlag", "cycleDate", "mismatch", "moderator",
+        "createdDate", "modifiedDate", "modifiedBy", "reportGroup", "hasPhoto"
+    ]
+
     private func add(_ query : CKQueryOperation, loaded: @escaping ((Int) -> Void), completionHandler: @escaping ([LocationRecordDelegate], Bool?, Error?,@escaping ((Int) -> Void)) -> Void) {
         var result: [LocationRecordDelegate] = []
         let operation = query
         operation.resultsLimit = 500
+        operation.desiredKeys = LocationsCK.bulkSyncDesiredKeys
         operation.recordMatchedBlock = { _, res in
             switch res {
                 case .success(let record) : result.append(record)
