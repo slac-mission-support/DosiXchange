@@ -70,6 +70,21 @@ class Cache: Codable {
         return locations[i]
     }
 
+    // Removes the records with the given recordNames from the locations array
+    // AND the pending-changes queue, then rebuilds the transient index. The
+    // changes queue is pruned too so a deleted record can't be resurrected by
+    // a queued upload on the next sync. Items with a nil recordName are never
+    // touched. Returns how many location records were removed.
+    @discardableResult
+    func remove(recordNames: Set<String>) -> Int {
+        guard !recordNames.isEmpty else { return 0 }
+        let before = locations.count
+        locations.removeAll { $0.recordName != nil && recordNames.contains($0.recordName!) }
+        changes.removeAll { $0.recordName != nil && recordNames.contains($0.recordName!) }
+        rebuildLocationIndex()
+        return before - locations.count
+    }
+
     func addChange(_ item: LocationRecordCacheItem) {
         item.setValue(user, forKey: "modifiedBy")
         if let index = changes.firstIndex(where: { l in l.recordName == item.recordName}) {

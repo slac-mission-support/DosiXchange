@@ -429,6 +429,117 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(reloaded.defaultLongitude, -122.5)
     }
 
+    // MARK: - Cache.remove (SOW 2.2: super-user delete, slice 1)
+
+    // deleteOldCycleRecords drops confirmed-deleted records from the cache via
+    // remove(recordNames:). It must prune BOTH the locations array and the
+    // pending-changes queue (else a queued upload resurrects a deleted record
+    // on the next sync) and rebuild the transient index.
+
+    func test_remove_removesNamedLocationsAndReportsCount() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1"))
+        cache.add(try makeItem(recordName: "r2"))
+        cache.add(try makeItem(recordName: "r3"))
+
+        let removed = cache.remove(recordNames: ["r1", "r3"])
+
+        XCTAssertEqual(removed, 2)
+        XCTAssertEqual(cache.locations.map { $0.recordName }, ["r2"])
+    }
+
+    func test_remove_prunesPendingChangesForDeletedRecords() throws {
+        let cache = Cache()
+        let item = try makeItem(recordName: "r1")
+        cache.add(item)
+        cache.addChange(item)
+        cache.addChange(try makeItem(recordName: "r2"))
+
+        cache.remove(recordNames: ["r1"])
+
+        XCTAssertEqual(cache.changes.map { $0.recordName }, ["r2"],
+                       "A deleted record's queued edit must be pruned, or the next sync re-uploads (resurrects) it")
+    }
+
+    func test_remove_rebuildsIndexSoLookupMissesAndReAddAppendsFresh() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1", locdescription: "before"))
+        cache.add(try makeItem(recordName: "r2"))
+
+        cache.remove(recordNames: ["r1"])
+
+        XCTAssertNil(cache.location(forRecordName: "r1"),
+                     "Lookup must miss after removal, not return a neighbouring record via a stale index slot")
+        XCTAssertEqual(cache.location(forRecordName: "r2")?.recordName, "r2",
+                       "Surviving records must stay reachable through the rebuilt index")
+
+        cache.add(try makeItem(recordName: "r1", locdescription: "after"))
+        XCTAssertEqual(cache.locations.count, 2)
+        XCTAssertEqual(cache.location(forRecordName: "r1")?.locdescription, "after")
+    }
+
+    func test_remove_leavesNilRecordNameItemsAndUnknownNamesAlone() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: nil))
+        cache.add(try makeItem(recordName: "r1"))
+
+        let removed = cache.remove(recordNames: ["r1", "never-existed"])
+
+        XCTAssertEqual(removed, 1)
+        XCTAssertEqual(cache.locations.count, 1, "The nil-recordName item must survive; it can't match any name")
+    }
+
+    // MARK: - isEligibleForCycleDeletion (SOW 2.2 safety invariant)
+
+    // The acceptance criterion is absolute: records from the most recent 4
+    // cycles cannot be deleted even if explicitly requested. This pure decision
+    // is the single place that invariant lives — deleteOldCycleRecords
+    // recomputes eligibility itself rather than trusting the caller's list.
+
+    func test_eligible_falseWhenCycleDateNil() throws {
+        let item = try makeItem(recordName: "r1")
+
+        XCTAssertFalse(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: ["1-1-2026"]),
+                       "A record without a cycleDate can't be proven old; the conservative answer is keep")
+    }
+
+    func test_eligible_falseForEveryProtectedCycle() throws {
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+
+        for cycle in protectedCycles {
+            let item = try makeItem(recordName: "r1", cycleDate: cycle)
+            XCTAssertFalse(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                           "Cycle \(cycle) is within the most recent 4 and must never be deletable")
+        }
+    }
+
+    func test_eligible_trueForCycleOlderThanProtectedWindow() throws {
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+        let fifthCycleBack = RecordsUpdate.generatePriorCycleDate(cycleDate: protectedCycles.last!)
+        let item = try makeItem(recordName: "r1", cycleDate: fifthCycleBack)
+
+        XCTAssertTrue(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                      "The 5th cycle back is outside the protected window and must be eligible")
+    }
+
+    // MARK: - getLastCycles (the protected-window source)
+
+    func test_getLastCycles_returnsContiguousCyclesNewestFirst() {
+        let cycles = RecordsUpdate.getLastCycles(cycles: 4)
+
+        XCTAssertEqual(cycles.count, 4)
+        XCTAssertEqual(cycles[0], RecordsUpdate.generateCycleDate(),
+                       "The newest entry must be the current cycle")
+        for cycle in cycles {
+            XCTAssertTrue(cycle.hasPrefix("1-1-") || cycle.hasPrefix("7-1-"),
+                          "Cycle keys use the exact \"M-1-YYYY\" format with M of 1 or 7; got \(cycle)")
+        }
+        for index in 1..<cycles.count {
+            XCTAssertEqual(cycles[index], RecordsUpdate.generatePriorCycleDate(cycleDate: cycles[index - 1]),
+                           "Each entry must be exactly one 6-month cycle older than the previous")
+        }
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
