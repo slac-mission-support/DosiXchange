@@ -508,14 +508,20 @@ extension ScannerViewController {
         variables.cycle = RecordsUpdate.generateCycleDate()
         
         locationManager.requestAlwaysAuthorization()
-        var currentLocation = CLLocation()
-        if (locationManager.authorizationStatus == .authorizedWhenInUse ||
-            locationManager.authorizationStatus ==  .authorizedAlways) {
-            currentLocation = locationManager.location!
+        //location is nil when there is no GPS fix at all (e.g. WiFi-only iPads
+        //with WiFi off). Retrying can't produce a fix, so assign the fallback
+        //coordinates (configurable via the CloudKit Settings record) directly
+        //instead of sending the user through the alert15 retry loop.
+        guard (locationManager.authorizationStatus == .authorizedWhenInUse ||
+               locationManager.authorizationStatus ==  .authorizedAlways),
+              let currentLocation = locationManager.location else {
+            setCoordinates(currentLocation: settings?.defaultCoordinates ?? Slac.defaultCoordinates)
+            self.alert8()
+            return
         }
-        
+
         if(Slac.isLocationInRange(location: currentLocation) || outOfRangeCounter >= numberOfGPSRetry ) {
-            setCoordinates(currentLocation: (outOfRangeCounter >= numberOfGPSRetry ? Slac.defaultCoordinates : currentLocation))
+            setCoordinates(currentLocation: (outOfRangeCounter >= numberOfGPSRetry ? (settings?.defaultCoordinates ?? Slac.defaultCoordinates) : currentLocation))
             self.alert8()
         } else{
             //Wrong Location, Show Try Again alert

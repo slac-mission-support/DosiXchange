@@ -449,6 +449,8 @@ class LocationsCK : Locations, SettingsService {
                     let settings = Settings()
                     settings.dosimeterMinimumLength = record["dosimeterMinimumLength"] as? Int ?? 11
                     settings.dosimeterMaximumLength = record["dosimeterMaximumLength"] as? Int ?? 11
+                    settings.defaultLatitude = record["defaultLatitude"] as? Double
+                    settings.defaultLongitude = record["defaultLongitude"] as? Double
                     self.cache!.setSettings(settings: settings)
                 }
             }            
