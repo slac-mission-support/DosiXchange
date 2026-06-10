@@ -380,6 +380,55 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(ToolsViewController.buildDateString(from: date), "May, 2023")
     }
 
+    // MARK: - Settings fallback coordinates (SOW R3-a: offline scan, no GPS fix)
+
+    // Devices in the field have a cached Settings JSON written before the
+    // coordinate fields existed. They must stay decodable — the fields are
+    // optional for exactly this reason — and the accessor must fall back to the
+    // SOW R3 coordinate. If decode ever starts failing here, shipping it would
+    // break every already-deployed cache.
+    func test_settingsDecode_withoutCoordinateFields_succeedsAndUsesFallback() throws {
+        let oldFormat = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(oldFormat.utf8))
+
+        XCTAssertNil(settings.defaultLatitude)
+        XCTAssertNil(settings.defaultLongitude)
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.latitude, 37.41927542738301, accuracy: 0.000001)
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.longitude, -122.20517033784913, accuracy: 0.000001)
+    }
+
+    func test_settingsDecode_withCoordinateFields_usesConfiguredValues() throws {
+        let configured = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11, "defaultLatitude": 37.5, "defaultLongitude": -122.5}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(configured.utf8))
+
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.latitude, 37.5, accuracy: 0.000001)
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.longitude, -122.5, accuracy: 0.000001)
+    }
+
+    func test_defaultCoordinates_fallsBackPerAxisWhenPartiallyConfigured() {
+        // Only one field set in CloudKit (a half-finished edit of the Settings
+        // record) must not zero the other axis.
+        let settings = Settings()
+        settings.defaultLatitude = 37.5
+
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.latitude, 37.5, accuracy: 0.000001)
+        XCTAssertEqual(settings.defaultCoordinates.coordinate.longitude, -122.20517033784913, accuracy: 0.000001)
+    }
+
+    func test_settings_roundTripPreservesCoordinateFields() throws {
+        let settings = Settings()
+        settings.defaultLatitude = 37.5
+        settings.defaultLongitude = -122.5
+
+        let data = try JSONEncoder().encode(settings)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+
+        XCTAssertEqual(reloaded.defaultLatitude, 37.5)
+        XCTAssertEqual(reloaded.defaultLongitude, -122.5)
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
