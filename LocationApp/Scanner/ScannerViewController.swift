@@ -509,9 +509,13 @@ extension ScannerViewController {
         
         locationManager.requestAlwaysAuthorization()
         var currentLocation = CLLocation()
+        //location can be nil on WiFi-only iPads when WiFi is off (no WiFi
+        //positioning fix). Fall through with the default (0,0) location so the
+        //out-of-range retry flow (alert15 -> default coordinates) handles it.
         if (locationManager.authorizationStatus == .authorizedWhenInUse ||
-            locationManager.authorizationStatus ==  .authorizedAlways) {
-            currentLocation = locationManager.location!
+            locationManager.authorizationStatus ==  .authorizedAlways),
+            let location = locationManager.location {
+            currentLocation = location
         }
         
         if(Slac.isLocationInRange(location: currentLocation) || outOfRangeCounter >= numberOfGPSRetry ) {
