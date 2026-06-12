@@ -572,6 +572,93 @@ class LocationAppTests: XCTestCase {
         }
     }
 
+    // MARK: - CycleCSVExport (the forced all-cycles export before deletion)
+
+    func test_csvHeader_matchesTheToolsExportColumns() {
+        XCTAssertEqual(CycleCSVExport.header,
+                       "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,Mismatch (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n",
+                       "Header must stay column-compatible with the Tools email export")
+    }
+
+    func test_row_rendersEveryFieldInColumnOrder() throws {
+        let deployed = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 5))
+        let modified = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 10))
+        let json = """
+        { "QRCode": "BLG 006-015", "latitude": "37.4", "longitude": "-122.2", \
+        "locdescription": "Test Bldg", "active": 1, "dosinumber": "D123", \
+        "collectedFlag": 1, "cycleDate": "1-1-2026", "mismatch": 0, "moderator": 1, \
+        "creationDate": \(deployed.timeIntervalSinceReferenceDate), \
+        "createdDate": \(deployed.timeIntervalSinceReferenceDate), \
+        "modifiedDate": \(modified.timeIntervalSinceReferenceDate), \
+        "modificationDate": \(modified.timeIntervalSinceReferenceDate), \
+        "recordName": "rec-1", "modifiedBy": "tester", "reportGroup": "G1", \
+        "hasPhoto": false }
+        """
+        let item = try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
+
+        XCTAssertEqual(CycleCSVExport.row(for: item),
+                       "BLG 006-015,37.4,-122.2,Test Bldg,1,1,D123,1,1-1-2026,06/05/2026,06/10/2026,0,06/05/2026,06/10/2026,rec-1,tester,G1\n")
+    }
+
+    func test_row_rendersNilOptionalFieldsAsBlankCells() throws {
+        // makeItem populates only the required fields; every optional is nil.
+        // The Tools row builder force-unwrapped dates — this one must not.
+        let item = try makeItem(recordName: nil)
+
+        let required = ["Q", "0", "0", "test", "", "0"]
+        let blanks = Array(repeating: "", count: 11)
+        XCTAssertEqual(CycleCSVExport.row(for: item),
+                       (required + blanks).joined(separator: ",") + "\n",
+                       "Nil optionals must render as empty cells, never crash or shift columns")
+    }
+
+    func test_csvText_sortsByQRCodeThenNewestDeployFirst() throws {
+        let later = try makeItem(recordName: "rB", QRCode: "BLG 044")
+        let olderDeploy = try makeItem(recordName: "rA-old", QRCode: "BLG 003", createdDate: 700_000_000)
+        let newerDeploy = try makeItem(recordName: "rA-new", QRCode: "BLG 003", createdDate: 800_000_000)
+
+        let text = CycleCSVExport.csvText(for: [later, olderDeploy, newerDeploy])
+        let lines = text.components(separatedBy: "\n")
+
+        XCTAssertTrue(lines[1].contains("rA-new"), "QRCode ascending, newest deploy first within a QRCode")
+        XCTAssertTrue(lines[2].contains("rA-old"))
+        XCTAssertTrue(lines[3].contains("rB"))
+    }
+
+    func test_csvText_includesDeletableRecordsTheToolsExportWouldDrop() throws {
+        // A record with an old cycle but a nil createdDate is delete-eligible,
+        // yet the Tools export filters on createdDate != nil and would omit it.
+        // The pre-delete audit export must be a superset of anything deletable.
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+        let fifthCycleBack = RecordsUpdate.generatePriorCycleDate(cycleDate: protectedCycles.last!)
+        let item = try makeItem(recordName: "ghost-record", cycleDate: fifthCycleBack)
+
+        XCTAssertTrue(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                      "Precondition: this record must be deletable for the test to mean anything")
+        XCTAssertTrue(CycleCSVExport.csvText(for: [item]).contains("ghost-record"),
+                      "Every deletable record must appear in the audit export")
+    }
+
+    func test_csvText_beginsWithHeaderAndEndsWithEndOfFileMarker() throws {
+        let text = CycleCSVExport.csvText(for: [try makeItem(recordName: "r1")])
+
+        XCTAssertTrue(text.hasPrefix(CycleCSVExport.header))
+        XCTAssertTrue(text.hasSuffix("End of File\n"))
+        XCTAssertEqual(text.components(separatedBy: "\n").count, 4,
+                       "Header + one row + End of File + the trailing newline's empty component")
+    }
+
+    /// Noon local time avoids DST-edge surprises when the exporter formats
+    /// the date back in the current calendar.
+    private func noonLocal(year: Int, month: Int, day: Int) -> Date? {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = 12
+        return Calendar.current.date(from: components)
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
@@ -625,9 +712,9 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(original.collectedFlag, 0, "copy must not alias the original")
     }
 
-    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
-            "\"QRCode\": \"Q\"",
+            "\"QRCode\": \"\(QRCode)\"",
             "\"latitude\": \"0\"",
             "\"longitude\": \"0\"",
             "\"locdescription\": \"\(locdescription)\"",
