@@ -134,8 +134,19 @@
                                     <action selector="resetCacheTouchUp:" destination="M89-R5-CVf" eventType="touchUpInside" id="IUB-yW-ET9"/>
                                 </connections>
                             </button>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="dOc-Bt-2x2">
+                                <rect key="frame" x="99" y="534" width="230" height="44"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="26"/>
+                                <state key="normal" title="Delete Old Cycles">
+                                    <color key="titleColor" red="0.58072251080000004" green="0.066734083" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                </state>
+                                <connections>
+                                    <action selector="deleteOldCyclesTouchUp:" destination="M89-R5-CVf" eventType="touchUpInside" id="dOc-Ac-2x2"/>
+                                </connections>
+                            </button>
                             <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="white" translatesAutoresizingMaskIntoConstraints="NO" id="12k-op-bR2">
-                                <rect key="frame" x="204" y="534" width="20" height="20"/>
+                                <rect key="frame" x="204" y="608" width="20" height="20"/>
                                 <color key="color" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </activityIndicatorView>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="08g-6x-YOH">
@@ -168,7 +179,10 @@
                             <constraint firstItem="RcM-5r-EfG" firstAttribute="leading" secondItem="8cu-87-6eq" secondAttribute="centerX" constant="-90" id="btq-o1-rUX"/>
                             <constraint firstItem="iL3-Xk-1J0" firstAttribute="trailing" secondItem="8cu-87-6eq" secondAttribute="centerX" constant="80" id="dUa-8w-h9i"/>
                             <constraint firstItem="8cu-87-6eq" firstAttribute="bottom" secondItem="3FX-rC-9sw" secondAttribute="bottom" constant="20" id="dVq-SL-gBz"/>
-                            <constraint firstItem="12k-op-bR2" firstAttribute="top" secondItem="RcM-5r-EfG" secondAttribute="bottom" constant="30" id="eAl-df-2zj"/>
+                            <constraint firstItem="dOc-Bt-2x2" firstAttribute="top" secondItem="RcM-5r-EfG" secondAttribute="bottom" constant="30" id="dOc-Tp-2x2"/>
+                            <constraint firstItem="dOc-Bt-2x2" firstAttribute="leading" secondItem="8cu-87-6eq" secondAttribute="centerX" constant="-115" id="dOc-Ld-2x2"/>
+                            <constraint firstItem="dOc-Bt-2x2" firstAttribute="trailing" secondItem="8cu-87-6eq" secondAttribute="centerX" constant="115" id="dOc-Tr-2x2"/>
+                            <constraint firstItem="12k-op-bR2" firstAttribute="top" secondItem="dOc-Bt-2x2" secondAttribute="bottom" constant="30" id="eAl-df-2zj"/>
                             <constraint firstItem="P1C-rk-auY" firstAttribute="top" secondItem="zZL-V9-XtT" secondAttribute="bottom" constant="21" id="fxf-KM-3yN"/>
                             <constraint firstItem="iL3-Xk-1J0" firstAttribute="leading" secondItem="8cu-87-6eq" secondAttribute="centerX" constant="-80" id="g45-4J-oW3"/>
                             <constraint firstItem="3FX-rC-9sw" firstAttribute="centerX" secondItem="Kob-bg-1b1" secondAttribute="centerX" id="gf8-t8-hfs"/>
@@ -183,6 +197,7 @@
                         <outlet property="buildDateLabel" destination="3FX-rC-9sw" id="BDt-Lb-9sw"/>
                         <outlet property="button1" destination="P1C-rk-auY" id="9O8-Dx-vXv"/>
                         <outlet property="button3" destination="iL3-Xk-1J0" id="GOc-1P-xTC"/>
+                        <outlet property="deleteOldCyclesButton" destination="dOc-Bt-2x2" id="dOc-Ou-2x2"/>
                         <outlet property="dosimeters" destination="08g-6x-YOH" id="fLM-zP-XPq"/>
                         <outlet property="resetCacheButton" destination="RcM-5r-EfG" id="fRd-Nn-Tgf"/>
                     </connections>

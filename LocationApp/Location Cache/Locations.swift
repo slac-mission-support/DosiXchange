@@ -219,22 +219,18 @@ class LocationsCK : Locations, SettingsService {
         return cachedCycle == item.cycleDate
     }
 
-    //MARK:  Super-user delete (SOW 2.2)
+    //MARK:  Super-user delete
 
-    // Pure decision used by deleteOldCycleRecords: a record may be deleted only
-    // when it carries a cycleDate that is NOT among the protected (most recent)
-    // cycles. Records with a nil cycleDate are never deleted — we can't prove
-    // they're old, so the conservative answer is to keep them.
-    // Internal (not private) so LocationAppTests can drive the decision matrix
-    // offline; same exception precedent as shouldSkipSave.
+    // A record may be deleted only when its cycleDate is NOT among the
+    // protected (most recent) cycles; a nil cycleDate is never deletable.
+    // Internal so LocationAppTests can drive the decision matrix offline.
     internal static func isEligibleForCycleDeletion(item: LocationRecordCacheItem, protectedCycles: [String]) -> Bool {
         guard let cycleDate = item.cycleDate else { return false }
         return !protectedCycles.contains(cycleDate)
     }
 
-    // Records eligible for super-user deletion: everything whose cycleDate falls
-    // outside the most recent keepingCycles cycles. The admin screen uses this
-    // to preview the count before any deletion is confirmed.
+    // Everything whose cycleDate falls outside the most recent keepingCycles
+    // cycles. The admin screen uses this to preview the affected records.
     func eligibleOldCycleRecords(keepingCycles: Int) -> [LocationRecordCacheItem] {
         let protectedCycles = RecordsUpdate.getLastCycles(cycles: keepingCycles)
         return filter(by: { LocationsCK.isEligibleForCycleDeletion(item: $0, protectedCycles: protectedCycles) })
@@ -243,14 +239,9 @@ class LocationsCK : Locations, SettingsService {
     static let deleteOfflineError = NSError(domain: "LocationApp", code: 503,
         userInfo: [NSLocalizedDescriptionKey: "No network connection. Deletion stopped — records already deleted are gone; the rest are untouched."])
 
-    // Deletes every eligible old-cycle record from CloudKit in pages of 200,
-    // mirroring uploadChanges' pagination. Eligibility is recomputed here, not
-    // trusted from the caller, so the most-recent-cycles protection holds even
-    // if the UI ever passes something stale. Per batch: only records CloudKit
-    // confirms deleted are dropped from the cache (a failed delete stays visible
-    // locally so a retry can pick it up), progress reports on the main queue,
-    // and connectivity loss stops the run gracefully between batches.
-    // Every step prints — the operation must be auditable from the console log.
+    // Deletes every eligible old-cycle record from CloudKit in pages of 200.
+    // Eligibility is recomputed here rather than trusted from the caller; only
+    // confirmed deletions leave the cache, and every step prints for audit.
     func deleteOldCycleRecords(keepingCycles: Int, progress: @escaping (Int, Int) -> Void, completion: @escaping (Int, Error?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let names = self.eligibleOldCycleRecords(keepingCycles: keepingCycles).compactMap { $0.recordName }
@@ -553,6 +544,7 @@ class LocationsCK : Locations, SettingsService {
                     settings.dosimeterMaximumLength = record["dosimeterMaximumLength"] as? Int ?? 11
                     settings.defaultLatitude = record["defaultLatitude"] as? Double
                     settings.defaultLongitude = record["defaultLongitude"] as? Double
+                    settings.superUserPasscode = record["superUserPasscode"] as? Int
                     self.cache!.setSettings(settings: settings)
                 }
             }            

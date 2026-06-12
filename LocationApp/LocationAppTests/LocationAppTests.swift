@@ -429,12 +429,45 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(reloaded.defaultLongitude, -122.5)
     }
 
-    // MARK: - Cache.remove (SOW 2.2: super-user delete, slice 1)
+    // MARK: - Settings super-user passcode (delete-old-cycles gate)
 
-    // deleteOldCycleRecords drops confirmed-deleted records from the cache via
-    // remove(recordNames:). It must prune BOTH the locations array and the
-    // pending-changes queue (else a queued upload resurrects a deleted record
-    // on the next sync) and rebuild the transient index.
+    // Same decode-compatibility invariant as the coordinate fields: cached
+    // Settings JSON written before the passcode field existed must still
+    // decode, with the accessor falling back to the initial passcode.
+    func test_settingsDecode_withoutPasscodeField_succeedsAndUsesFallback() throws {
+        let oldFormat = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(oldFormat.utf8))
+
+        XCTAssertNil(settings.superUserPasscode)
+        XCTAssertEqual(settings.superUserPasscodeValue, 4299)
+    }
+
+    func test_settingsDecode_withPasscodeField_usesConfiguredValue() throws {
+        // A rotated passcode set on the CloudKit Settings record must win over
+        // the built-in initial value.
+        let configured = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11, "superUserPasscode": 8121}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(configured.utf8))
+
+        XCTAssertEqual(settings.superUserPasscodeValue, 8121)
+    }
+
+    func test_settings_roundTripPreservesPasscode() throws {
+        let settings = Settings()
+        settings.superUserPasscode = 8121
+
+        let data = try JSONEncoder().encode(settings)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+
+        XCTAssertEqual(reloaded.superUserPasscode, 8121)
+    }
+
+    // MARK: - Cache.remove (super-user delete)
+
+    // remove(recordNames:) must prune BOTH the locations array and the
+    // pending-changes queue (else a queued upload resurrects a deleted
+    // record on the next sync) and rebuild the transient index.
 
     func test_remove_removesNamedLocationsAndReportsCount() throws {
         let cache = Cache()
@@ -489,12 +522,11 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(cache.locations.count, 1, "The nil-recordName item must survive; it can't match any name")
     }
 
-    // MARK: - isEligibleForCycleDeletion (SOW 2.2 safety invariant)
+    // MARK: - isEligibleForCycleDeletion (safety invariant)
 
-    // The acceptance criterion is absolute: records from the most recent 4
-    // cycles cannot be deleted even if explicitly requested. This pure decision
-    // is the single place that invariant lives — deleteOldCycleRecords
-    // recomputes eligibility itself rather than trusting the caller's list.
+    // Records from the most recent 4 cycles can never be deleted, even if
+    // explicitly requested. deleteOldCycleRecords recomputes eligibility
+    // itself rather than trusting the caller's list.
 
     func test_eligible_falseWhenCycleDateNil() throws {
         let item = try makeItem(recordName: "r1")
