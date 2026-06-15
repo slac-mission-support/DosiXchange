@@ -1,4 +1,4 @@
-Hi,
+# Change the Delete and Location Settings
 
 The app only ever reads the Settings record, it never writes to it, so it couldn't have removed anything. And the access code is built into the app itself, so it works whether or not it's in CloudKit.
 
