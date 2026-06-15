@@ -597,7 +597,8 @@ class LocationAppTests: XCTestCase {
         let item = try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
 
         XCTAssertEqual(CycleCSVExport.row(for: item),
-                       "BLG 006-015,37.4,-122.2,Test Bldg,1,1,D123,1,1-1-2026,06/05/2026,06/10/2026,0,06/05/2026,06/10/2026,rec-1,tester,G1\n")
+                       "BLG 006-015,37.4,-122.2,\"Test Bldg\",1,1,D123,1,1-1-2026,06/05/2026,06/10/2026,0,06/05/2026,06/10/2026,rec-1,tester,\"G1\"\n",
+                       "Description and Report Group cells are quoted so free text can't shift columns")
     }
 
     func test_row_rendersNilOptionalFieldsAsBlankCells() throws {
@@ -605,10 +606,12 @@ class LocationAppTests: XCTestCase {
         // The Tools row builder force-unwrapped dates — this one must not.
         let item = try makeItem(recordName: nil)
 
-        let required = ["Q", "0", "0", "test", "", "0"]
-        let blanks = Array(repeating: "", count: 11)
+        // Description is quoted ("test"); the nil Report Group is quoted-empty
+        // ("\"\""); every other optional renders as a bare empty cell.
+        let fields = ["Q", "0", "0", "\"test\"", "", "0",
+                      "", "", "", "", "", "", "", "", "", "", "\"\""]
         XCTAssertEqual(CycleCSVExport.row(for: item),
-                       (required + blanks).joined(separator: ",") + "\n",
+                       fields.joined(separator: ",") + "\n",
                        "Nil optionals must render as empty cells, never crash or shift columns")
     }
 
@@ -753,5 +756,45 @@ class LocationAppTests: XCTestCase {
     private func removeCacheFileOnDisk() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         try? FileManager.default.removeItem(at: caches.appendingPathComponent("cache.txt"))
+    }
+
+    // MARK: - Delete Old Cycles super-user gate (slice 4)
+
+    // The destructive step stays locked unless BOTH interlocks hold: the
+    // all-cycles export was emailed this session AND there is something old to
+    // delete. Either alone must keep the delete button inert.
+    func test_canDelete_requiresBothExportAndEligibleRecords() {
+        XCTAssertTrue(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: 5),
+                      "Armed: export sent and old records exist")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: false, eligibleRecordCount: 5),
+                       "Locked: export not yet emailed")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: 0),
+                       "Locked: nothing old to delete")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: false, eligibleRecordCount: 0),
+                       "Locked: neither interlock satisfied")
+    }
+
+    // A negative count can never arm the gate (defensive — eligibleTotal can't
+    // go negative today, but the gate must not depend on that).
+    func test_canDelete_falseForNonPositiveCount() {
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: -1))
+    }
+
+    // The type-DELETE confirmation must match EXACTLY: uppercase, no leading or
+    // trailing whitespace, no near-misses. This is the last guard before a
+    // permanent CloudKit deletion, so the rule is pinned by a test.
+    func test_deleteIsConfirmed_requiresExactUppercaseDELETE() {
+        XCTAssertTrue(DeleteOldCyclesViewController.deleteIsConfirmed(byTyping: "DELETE"))
+
+        for rejected in ["delete", "Delete", "DELETE ", " DELETE", " DELETE ", "DELET", "DELETED", "", nil] {
+            XCTAssertFalse(DeleteOldCyclesViewController.deleteIsConfirmed(byTyping: rejected),
+                           "\(String(describing: rejected)) must not confirm a deletion")
+        }
+    }
+
+    // The forced export must address the SLAC records-management group; a typo
+    // here would silently send the audit trail to the wrong place.
+    func test_exportRecipient_isTheRecordsManagementGroup() {
+        XCTAssertEqual(DeleteOldCyclesViewController.exportRecipient, "esh-DREP@slac.stanford.edu")
     }
 }

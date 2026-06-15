@@ -47,7 +47,13 @@ struct CycleCSVExport {
         let modifiedBy = item.modifiedBy ?? ""
         let group = item.reportGroup ?? ""
 
-        return "\(item.QRCode),\(item.latitude),\(item.longitude),\(item.locdescription),\(moderator),\(item.active),\(dosimeter),\(collected),\(cycle),\(format(item.creationDate)),\(format(item.modificationDate)),\(mismatch),\(format(item.createdDate)),\(format(item.modifiedDate)),\(recordID),\(modifiedBy),\(group)\n"
+        return "\(item.QRCode),\(item.latitude),\(item.longitude),\(quoted(item.locdescription)),\(moderator),\(item.active),\(dosimeter),\(collected),\(cycle),\(format(item.creationDate)),\(format(item.modificationDate)),\(mismatch),\(format(item.createdDate)),\(format(item.modifiedDate)),\(recordID),\(modifiedBy),\(quoted(group))\n"
+    }
+
+    //Wraps a free-text cell in quotes so an embedded comma or newline can't
+    //shift columns; any embedded quote is doubled, per RFC 4180.
+    private static func quoted(_ value: String) -> String {
+        return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 
     private static let dateFormatter: DateFormatter = {

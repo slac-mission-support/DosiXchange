@@ -174,9 +174,9 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     
     //MARK:  Super-user delete
 
-    //Passcode gate for the delete-old-cycles admin screen. The integer
-    //passcode is checked against the cached Settings record, so it can be
-    //rotated from CloudKit without an app update ("04299" matches by design).
+    //Obfuscation-level gate (not real access control) for delete-old-cycles:
+    //the integer passcode is checked against the cached Settings record, so it
+    //can be rotated from CloudKit without an app update ("04299" matches).
     @IBAction func deleteOldCyclesTouchUp(_ sender: Any) {
         let alert = UIAlertController(title: "Super User Access",
                                       message: "Enter the passcode to manage old cycles.",

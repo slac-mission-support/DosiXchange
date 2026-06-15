@@ -77,8 +77,12 @@ class Cache: Codable {
     func remove(recordNames: Set<String>) -> Int {
         guard !recordNames.isEmpty else { return 0 }
         let before = locations.count
-        locations.removeAll { $0.recordName != nil && recordNames.contains($0.recordName!) }
-        changes.removeAll { $0.recordName != nil && recordNames.contains($0.recordName!) }
+        let isNamed: (LocationRecordCacheItem) -> Bool = { item in
+            guard let name = item.recordName else { return false }
+            return recordNames.contains(name)
+        }
+        locations.removeAll(where: isNamed)
+        changes.removeAll(where: isNamed)
         rebuildLocationIndex()
         return before - locations.count
     }
