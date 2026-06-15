@@ -2,7 +2,7 @@
 
 * The app only ever reads the Settings record, it never writes to it, so it couldn't have removed anything. And the access code is built into the app itself, so it works whether or not it's in CloudKit.
 
-- defaultLatitude, defaultLongitude, and the passcode are all optional override fields.
+    - defaultLatitude, defaultLongitude, and the passcode are all optional override fields.
 
 * The app reads them when they're present, but falls back to built-in defaults when they're absent. the SLAC coordinate we agreed on for the fallback location, and 4299 for the access code. Because the app only reads them, it never creates them in CloudKit; they appear in this view only if they were typed onto the record by hand. In this Development environment they aren't currently on the record (they may have been there briefly and then cleared — an environment reset would do it), which is why you only see the two dosimeter-length fields.
 
