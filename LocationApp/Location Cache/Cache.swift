@@ -70,6 +70,23 @@ class Cache: Codable {
         return locations[i]
     }
 
+    // Removes the named records from the locations array AND the
+    // pending-changes queue (so a queued upload can't resurrect them),
+    // then rebuilds the index. Returns how many records were removed.
+    @discardableResult
+    func remove(recordNames: Set<String>) -> Int {
+        guard !recordNames.isEmpty else { return 0 }
+        let before = locations.count
+        let isNamed: (LocationRecordCacheItem) -> Bool = { item in
+            guard let name = item.recordName else { return false }
+            return recordNames.contains(name)
+        }
+        locations.removeAll(where: isNamed)
+        changes.removeAll(where: isNamed)
+        rebuildLocationIndex()
+        return before - locations.count
+    }
+
     func addChange(_ item: LocationRecordCacheItem) {
         item.setValue(user, forKey: "modifiedBy")
         if let index = changes.firstIndex(where: { l in l.recordName == item.recordName}) {

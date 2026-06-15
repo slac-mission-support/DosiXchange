@@ -429,6 +429,239 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(reloaded.defaultLongitude, -122.5)
     }
 
+    // MARK: - Settings super-user passcode (delete-old-cycles gate)
+
+    // Same decode-compatibility invariant as the coordinate fields: cached
+    // Settings JSON written before the passcode field existed must still
+    // decode, with the accessor falling back to the initial passcode.
+    func test_settingsDecode_withoutPasscodeField_succeedsAndUsesFallback() throws {
+        let oldFormat = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(oldFormat.utf8))
+
+        XCTAssertNil(settings.superUserPasscode)
+        XCTAssertEqual(settings.superUserPasscodeValue, 4299)
+    }
+
+    func test_settingsDecode_withPasscodeField_usesConfiguredValue() throws {
+        // A rotated passcode set on the CloudKit Settings record must win over
+        // the built-in initial value.
+        let configured = #"{"dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11, "superUserPasscode": 8121}"#
+
+        let settings = try JSONDecoder().decode(Settings.self, from: Data(configured.utf8))
+
+        XCTAssertEqual(settings.superUserPasscodeValue, 8121)
+    }
+
+    func test_settings_roundTripPreservesPasscode() throws {
+        let settings = Settings()
+        settings.superUserPasscode = 8121
+
+        let data = try JSONEncoder().encode(settings)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+
+        XCTAssertEqual(reloaded.superUserPasscode, 8121)
+    }
+
+    // MARK: - Cache.remove (super-user delete)
+
+    // remove(recordNames:) must prune BOTH the locations array and the
+    // pending-changes queue (else a queued upload resurrects a deleted
+    // record on the next sync) and rebuild the transient index.
+
+    func test_remove_removesNamedLocationsAndReportsCount() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1"))
+        cache.add(try makeItem(recordName: "r2"))
+        cache.add(try makeItem(recordName: "r3"))
+
+        let removed = cache.remove(recordNames: ["r1", "r3"])
+
+        XCTAssertEqual(removed, 2)
+        XCTAssertEqual(cache.locations.map { $0.recordName }, ["r2"])
+    }
+
+    func test_remove_prunesPendingChangesForDeletedRecords() throws {
+        let cache = Cache()
+        let item = try makeItem(recordName: "r1")
+        cache.add(item)
+        cache.addChange(item)
+        cache.addChange(try makeItem(recordName: "r2"))
+
+        cache.remove(recordNames: ["r1"])
+
+        XCTAssertEqual(cache.changes.map { $0.recordName }, ["r2"],
+                       "A deleted record's queued edit must be pruned, or the next sync re-uploads (resurrects) it")
+    }
+
+    func test_remove_rebuildsIndexSoLookupMissesAndReAddAppendsFresh() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: "r1", locdescription: "before"))
+        cache.add(try makeItem(recordName: "r2"))
+
+        cache.remove(recordNames: ["r1"])
+
+        XCTAssertNil(cache.location(forRecordName: "r1"),
+                     "Lookup must miss after removal, not return a neighbouring record via a stale index slot")
+        XCTAssertEqual(cache.location(forRecordName: "r2")?.recordName, "r2",
+                       "Surviving records must stay reachable through the rebuilt index")
+
+        cache.add(try makeItem(recordName: "r1", locdescription: "after"))
+        XCTAssertEqual(cache.locations.count, 2)
+        XCTAssertEqual(cache.location(forRecordName: "r1")?.locdescription, "after")
+    }
+
+    func test_remove_leavesNilRecordNameItemsAndUnknownNamesAlone() throws {
+        let cache = Cache()
+        cache.add(try makeItem(recordName: nil))
+        cache.add(try makeItem(recordName: "r1"))
+
+        let removed = cache.remove(recordNames: ["r1", "never-existed"])
+
+        XCTAssertEqual(removed, 1)
+        XCTAssertEqual(cache.locations.count, 1, "The nil-recordName item must survive; it can't match any name")
+    }
+
+    // MARK: - isEligibleForCycleDeletion (safety invariant)
+
+    // Records from the most recent 4 cycles can never be deleted, even if
+    // explicitly requested. deleteOldCycleRecords recomputes eligibility
+    // itself rather than trusting the caller's list.
+
+    func test_eligible_falseWhenCycleDateNil() throws {
+        let item = try makeItem(recordName: "r1")
+
+        XCTAssertFalse(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: ["1-1-2026"]),
+                       "A record without a cycleDate can't be proven old; the conservative answer is keep")
+    }
+
+    func test_eligible_falseForEveryProtectedCycle() throws {
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+
+        for cycle in protectedCycles {
+            let item = try makeItem(recordName: "r1", cycleDate: cycle)
+            XCTAssertFalse(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                           "Cycle \(cycle) is within the most recent 4 and must never be deletable")
+        }
+    }
+
+    func test_eligible_trueForCycleOlderThanProtectedWindow() throws {
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+        let fifthCycleBack = RecordsUpdate.generatePriorCycleDate(cycleDate: protectedCycles.last!)
+        let item = try makeItem(recordName: "r1", cycleDate: fifthCycleBack)
+
+        XCTAssertTrue(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                      "The 5th cycle back is outside the protected window and must be eligible")
+    }
+
+    // MARK: - getLastCycles (the protected-window source)
+
+    func test_getLastCycles_returnsContiguousCyclesNewestFirst() {
+        let cycles = RecordsUpdate.getLastCycles(cycles: 4)
+
+        XCTAssertEqual(cycles.count, 4)
+        XCTAssertEqual(cycles[0], RecordsUpdate.generateCycleDate(),
+                       "The newest entry must be the current cycle")
+        for cycle in cycles {
+            XCTAssertTrue(cycle.hasPrefix("1-1-") || cycle.hasPrefix("7-1-"),
+                          "Cycle keys use the exact \"M-1-YYYY\" format with M of 1 or 7; got \(cycle)")
+        }
+        for index in 1..<cycles.count {
+            XCTAssertEqual(cycles[index], RecordsUpdate.generatePriorCycleDate(cycleDate: cycles[index - 1]),
+                           "Each entry must be exactly one 6-month cycle older than the previous")
+        }
+    }
+
+    // MARK: - CycleCSVExport (the forced all-cycles export before deletion)
+
+    func test_csvHeader_matchesTheToolsExportColumns() {
+        XCTAssertEqual(CycleCSVExport.header,
+                       "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,Mismatch (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n",
+                       "Header must stay column-compatible with the Tools email export")
+    }
+
+    func test_row_rendersEveryFieldInColumnOrder() throws {
+        let deployed = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 5))
+        let modified = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 10))
+        let json = """
+        { "QRCode": "BLG 006-015", "latitude": "37.4", "longitude": "-122.2", \
+        "locdescription": "Test Bldg", "active": 1, "dosinumber": "D123", \
+        "collectedFlag": 1, "cycleDate": "1-1-2026", "mismatch": 0, "moderator": 1, \
+        "creationDate": \(deployed.timeIntervalSinceReferenceDate), \
+        "createdDate": \(deployed.timeIntervalSinceReferenceDate), \
+        "modifiedDate": \(modified.timeIntervalSinceReferenceDate), \
+        "modificationDate": \(modified.timeIntervalSinceReferenceDate), \
+        "recordName": "rec-1", "modifiedBy": "tester", "reportGroup": "G1", \
+        "hasPhoto": false }
+        """
+        let item = try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
+
+        XCTAssertEqual(CycleCSVExport.row(for: item),
+                       "BLG 006-015,37.4,-122.2,\"Test Bldg\",1,1,D123,1,1-1-2026,06/05/2026,06/10/2026,0,06/05/2026,06/10/2026,rec-1,tester,\"G1\"\n",
+                       "Description and Report Group cells are quoted so free text can't shift columns")
+    }
+
+    func test_row_rendersNilOptionalFieldsAsBlankCells() throws {
+        // makeItem populates only the required fields; every optional is nil.
+        // The Tools row builder force-unwrapped dates — this one must not.
+        let item = try makeItem(recordName: nil)
+
+        // Description is quoted ("test"); the nil Report Group is quoted-empty
+        // ("\"\""); every other optional renders as a bare empty cell.
+        let fields = ["Q", "0", "0", "\"test\"", "", "0",
+                      "", "", "", "", "", "", "", "", "", "", "\"\""]
+        XCTAssertEqual(CycleCSVExport.row(for: item),
+                       fields.joined(separator: ",") + "\n",
+                       "Nil optionals must render as empty cells, never crash or shift columns")
+    }
+
+    func test_csvText_sortsByQRCodeThenNewestDeployFirst() throws {
+        let later = try makeItem(recordName: "rB", QRCode: "BLG 044")
+        let olderDeploy = try makeItem(recordName: "rA-old", QRCode: "BLG 003", createdDate: 700_000_000)
+        let newerDeploy = try makeItem(recordName: "rA-new", QRCode: "BLG 003", createdDate: 800_000_000)
+
+        let text = CycleCSVExport.csvText(for: [later, olderDeploy, newerDeploy])
+        let lines = text.components(separatedBy: "\n")
+
+        XCTAssertTrue(lines[1].contains("rA-new"), "QRCode ascending, newest deploy first within a QRCode")
+        XCTAssertTrue(lines[2].contains("rA-old"))
+        XCTAssertTrue(lines[3].contains("rB"))
+    }
+
+    func test_csvText_includesDeletableRecordsTheToolsExportWouldDrop() throws {
+        // A record with an old cycle but a nil createdDate is delete-eligible,
+        // yet the Tools export filters on createdDate != nil and would omit it.
+        // The pre-delete audit export must be a superset of anything deletable.
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: 4)
+        let fifthCycleBack = RecordsUpdate.generatePriorCycleDate(cycleDate: protectedCycles.last!)
+        let item = try makeItem(recordName: "ghost-record", cycleDate: fifthCycleBack)
+
+        XCTAssertTrue(LocationsCK.isEligibleForCycleDeletion(item: item, protectedCycles: protectedCycles),
+                      "Precondition: this record must be deletable for the test to mean anything")
+        XCTAssertTrue(CycleCSVExport.csvText(for: [item]).contains("ghost-record"),
+                      "Every deletable record must appear in the audit export")
+    }
+
+    func test_csvText_beginsWithHeaderAndEndsWithEndOfFileMarker() throws {
+        let text = CycleCSVExport.csvText(for: [try makeItem(recordName: "r1")])
+
+        XCTAssertTrue(text.hasPrefix(CycleCSVExport.header))
+        XCTAssertTrue(text.hasSuffix("End of File\n"))
+        XCTAssertEqual(text.components(separatedBy: "\n").count, 4,
+                       "Header + one row + End of File + the trailing newline's empty component")
+    }
+
+    /// Noon local time avoids DST-edge surprises when the exporter formats
+    /// the date back in the current calendar.
+    private func noonLocal(year: Int, month: Int, day: Int) -> Date? {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = 12
+        return Calendar.current.date(from: components)
+    }
+
     // MARK: - Fixtures
 
     /// A Location CKRecord with every field `init?(withRecord:)` needs, minus the
@@ -482,9 +715,9 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(original.collectedFlag, 0, "copy must not alias the original")
     }
 
-    private func makeItem(recordName: String?, locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
-            "\"QRCode\": \"Q\"",
+            "\"QRCode\": \"\(QRCode)\"",
             "\"latitude\": \"0\"",
             "\"longitude\": \"0\"",
             "\"locdescription\": \"\(locdescription)\"",
@@ -523,5 +756,45 @@ class LocationAppTests: XCTestCase {
     private func removeCacheFileOnDisk() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         try? FileManager.default.removeItem(at: caches.appendingPathComponent("cache.txt"))
+    }
+
+    // MARK: - Delete Old Cycles super-user gate (slice 4)
+
+    // The destructive step stays locked unless BOTH interlocks hold: the
+    // all-cycles export was emailed this session AND there is something old to
+    // delete. Either alone must keep the delete button inert.
+    func test_canDelete_requiresBothExportAndEligibleRecords() {
+        XCTAssertTrue(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: 5),
+                      "Armed: export sent and old records exist")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: false, eligibleRecordCount: 5),
+                       "Locked: export not yet emailed")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: 0),
+                       "Locked: nothing old to delete")
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: false, eligibleRecordCount: 0),
+                       "Locked: neither interlock satisfied")
+    }
+
+    // A negative count can never arm the gate (defensive — eligibleTotal can't
+    // go negative today, but the gate must not depend on that).
+    func test_canDelete_falseForNonPositiveCount() {
+        XCTAssertFalse(DeleteOldCyclesViewController.canDelete(hasEmailedExport: true, eligibleRecordCount: -1))
+    }
+
+    // The type-DELETE confirmation must match EXACTLY: uppercase, no leading or
+    // trailing whitespace, no near-misses. This is the last guard before a
+    // permanent CloudKit deletion, so the rule is pinned by a test.
+    func test_deleteIsConfirmed_requiresExactUppercaseDELETE() {
+        XCTAssertTrue(DeleteOldCyclesViewController.deleteIsConfirmed(byTyping: "DELETE"))
+
+        for rejected in ["delete", "Delete", "DELETE ", " DELETE", " DELETE ", "DELET", "DELETED", "", nil] {
+            XCTAssertFalse(DeleteOldCyclesViewController.deleteIsConfirmed(byTyping: rejected),
+                           "\(String(describing: rejected)) must not confirm a deletion")
+        }
+    }
+
+    // The forced export must address the SLAC records-management group; a typo
+    // here would silently send the audit trail to the wrong place.
+    func test_exportRecipient_isTheRecordsManagementGroup() {
+        XCTAssertEqual(DeleteOldCyclesViewController.exportRecipient, "esh-DREP@slac.stanford.edu")
     }
 }

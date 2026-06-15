@@ -43,6 +43,7 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     @IBOutlet weak var button3: UIButton!
     @IBOutlet weak var resetCacheButton: UIButton!
     @IBOutlet weak var dosimeters: UIButton!
+    @IBOutlet weak var deleteOldCyclesButton: UIButton!
     
     let borderColorUp = UIColor(red: 0.580723, green: 0.0667341, blue: 0, alpha: 1).cgColor
     let borderColorDown = UIColor(red: 0.580723, green: 0.0667341, blue: 0, alpha: 0.25).cgColor
@@ -65,6 +66,7 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
         addBorderToButton(button: button3)
         addBorderToButton(button: resetCacheButton)
         addBorderToButton(button: dosimeters)
+        addBorderToButton(button: deleteOldCyclesButton)
         
         registerDevMode()
 
@@ -170,6 +172,51 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
         present(alert, animated: true)
     }
     
+    //MARK:  Super-user delete
+
+    //Obfuscation-level gate (not real access control) for delete-old-cycles:
+    //the integer passcode is checked against the cached Settings record, so it
+    //can be rotated from CloudKit without an app update ("04299" matches).
+    @IBAction func deleteOldCyclesTouchUp(_ sender: Any) {
+        let alert = UIAlertController(title: "Super User Access",
+                                      message: "Enter the passcode to manage old cycles.",
+                                      preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.keyboardType = .numberPad
+            textField.isSecureTextEntry = true
+            textField.placeholder = "Passcode"
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
+            let entered = Int(alert.textFields?.first?.text ?? "")
+            container.settings.getSettings { settings in
+                DispatchQueue.main.async {
+                    if let entered = entered, entered == settings.superUserPasscodeValue {
+                        print("Super-user gate: passcode accepted, opening Delete Old Cycles")
+                        self.presentDeleteOldCycles()
+                    } else {
+                        print("Super-user gate: passcode rejected")
+                        self.presentWrongPasscode()
+                    }
+                }
+            }
+        }))
+        present(alert, animated: true)
+    }
+
+    func presentDeleteOldCycles() {
+        let controller = UINavigationController(rootViewController: DeleteOldCyclesViewController())
+        present(controller, animated: true)
+    }
+
+    func presentWrongPasscode() {
+        let alert = UIAlertController(title: "Incorrect Passcode",
+                                      message: "The passcode you entered is not correct.",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(alert, animated: true)
+    }
+
     //MARK:  Send Email
     func sendEmail() {
         

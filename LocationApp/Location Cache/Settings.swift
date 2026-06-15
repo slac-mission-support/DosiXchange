@@ -22,4 +22,13 @@ class Settings : Codable {
         return CLLocation(latitude: defaultLatitude ?? 37.41927542738301,
                           longitude: defaultLongitude ?? -122.20517033784913)
     }
+
+    //Super-user passcode for the delete-old-cycles screen, configurable via
+    //the CloudKit Settings record. Optional like the coordinates above so
+    //caches saved before this field existed still decode.
+    var superUserPasscode : Int?
+
+    var superUserPasscodeValue: Int {
+        return superUserPasscode ?? 4299
+    }
 }

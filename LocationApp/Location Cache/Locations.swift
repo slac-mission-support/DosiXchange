@@ -30,6 +30,10 @@ protocol Locations {
     func fetch(id: String, completionHandler: @escaping (LocationRecordCacheItem?, Error?) -> Void)
 
     var pendingChangeCount: Int { get }
+
+    func eligibleOldCycleRecords(keepingCycles: Int) -> [LocationRecordCacheItem]
+
+    func deleteOldCycleRecords(keepingCycles: Int, progress: @escaping (Int, Int) -> Void, completion: @escaping (Int, Error?) -> Void)
 }
 
 class LocationsCK : Locations, SettingsService {
@@ -213,6 +217,95 @@ class LocationsCK : Locations, SettingsService {
         guard let cached = cached else { return false }
         guard cached.collectedFlag == 1, let cachedCycle = cached.cycleDate else { return false }
         return cachedCycle == item.cycleDate
+    }
+
+    //MARK:  Super-user delete
+
+    // A record may be deleted only when its cycleDate is NOT among the
+    // protected (most recent) cycles; a nil cycleDate is never deletable.
+    // Internal so LocationAppTests can drive the decision matrix offline.
+    internal static func isEligibleForCycleDeletion(item: LocationRecordCacheItem, protectedCycles: [String]) -> Bool {
+        guard let cycleDate = item.cycleDate else { return false }
+        return !protectedCycles.contains(cycleDate)
+    }
+
+    // Everything whose cycleDate falls outside the most recent keepingCycles
+    // cycles. The admin screen uses this to preview the affected records.
+    func eligibleOldCycleRecords(keepingCycles: Int) -> [LocationRecordCacheItem] {
+        let protectedCycles = RecordsUpdate.getLastCycles(cycles: keepingCycles)
+        return filter(by: { LocationsCK.isEligibleForCycleDeletion(item: $0, protectedCycles: protectedCycles) })
+    }
+
+    static let deleteOfflineError = NSError(domain: "LocationApp", code: 503,
+        userInfo: [NSLocalizedDescriptionKey: "No network connection. Deletion stopped — records already deleted are gone; the rest are untouched."])
+
+    // Deletes every eligible old-cycle record from CloudKit in pages of 200.
+    // Eligibility is recomputed here rather than trusted from the caller; only
+    // confirmed deletions leave the cache, and every step prints for audit.
+    func deleteOldCycleRecords(keepingCycles: Int, progress: @escaping (Int, Int) -> Void, completion: @escaping (Int, Error?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let names = self.eligibleOldCycleRecords(keepingCycles: keepingCycles).compactMap { $0.recordName }
+            let total = names.count
+            print("Super-user delete: \(total) records eligible (keeping last \(keepingCycles) cycles)")
+            guard total > 0 else {
+                DispatchQueue.main.async { completion(0, nil) }
+                return
+            }
+
+            var deleted = 0
+            let size = 200
+            var start = 0
+            while start < names.count {
+                // Graceful interruption: stop between batches the moment
+                // connectivity drops; everything deleted so far stays deleted.
+                if self.reachability.connection == .none {
+                    print("Super-user delete: connectivity lost after \(deleted)/\(total); stopping")
+                    DispatchQueue.main.async { completion(deleted, LocationsCK.deleteOfflineError) }
+                    return
+                }
+                let batch = Array(names[start..<min(start + size, names.count)])
+                start += size
+
+                var succeeded: [String] = []
+                var batchError: Error? = nil
+                let operation = CKModifyRecordsOperation(recordsToSave: nil,
+                                                         recordIDsToDelete: batch.map { CKRecord.ID(recordName: $0) })
+                operation.qualityOfService = .userInitiated
+                operation.perRecordDeleteBlock = { id, result in
+                    switch result {
+                    case .success:
+                        succeeded.append(id.recordName)
+                    case .failure(let error):
+                        print("Super-user delete failed for \(id.recordName): \(error.localizedDescription)")
+                        batchError = error
+                    }
+                }
+                operation.modifyRecordsResultBlock = { result in
+                    if case .failure(let error) = result {
+                        batchError = error
+                    }
+                }
+                self.database.add(operation)
+                operation.waitUntilFinished()
+
+                if !succeeded.isEmpty {
+                    self.semaphore.wait()
+                    let removed = self.cache?.remove(recordNames: Set(succeeded)) ?? 0
+                    self.cache?.save()
+                    self.semaphore.signal()
+                    deleted += succeeded.count
+                    print("Super-user delete: batch deleted \(succeeded.count) from cloud, removed \(removed) from cache (\(deleted)/\(total))")
+                    DispatchQueue.main.async { progress(deleted, total) }
+                }
+                if let error = batchError {
+                    print("Super-user delete: stopping after error with \(deleted)/\(total) deleted")
+                    DispatchQueue.main.async { completion(deleted, error) }
+                    return
+                }
+            }
+            print("Super-user delete: completed, \(deleted)/\(total) records deleted")
+            DispatchQueue.main.async { completion(deleted, nil) }
+        }
     }
 
     // Fetches the current server-side records for the given IDs. uploadChanges
@@ -451,6 +544,7 @@ class LocationsCK : Locations, SettingsService {
                     settings.dosimeterMaximumLength = record["dosimeterMaximumLength"] as? Int ?? 11
                     settings.defaultLatitude = record["defaultLatitude"] as? Double
                     settings.defaultLongitude = record["defaultLongitude"] as? Double
+                    settings.superUserPasscode = record["superUserPasscode"] as? Int
                     self.cache!.setSettings(settings: settings)
                 }
             }            

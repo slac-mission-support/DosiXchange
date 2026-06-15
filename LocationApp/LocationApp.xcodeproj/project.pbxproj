@@ -20,6 +20,7 @@
 		5AC96E122A2E09F10022068C /* RestoreLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC96E112A2E09F10022068C /* RestoreLocation.swift */; };
 		5C7925A122DE9B1900B981B2 /* LocationDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7925A022DE9B1900B981B2 /* LocationDetails.swift */; };
 		5CF01FDE22D92F19004604BC /* ToolsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF01FDD22D92F19004604BC /* ToolsViewController.swift */; };
+		DA20260611000000000000A2 /* DeleteOldCyclesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA20260611000000000000A1 /* DeleteOldCyclesViewController.swift */; };
 		5CFF888B22CAA5B700611F60 /* ActiveLocations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */; };
 		5E4D12742A2776E9002E4D91 /* Slac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4D12732A2776E9002E4D91 /* Slac.swift */; };
 		5E660CC12A3AFD1F00BC6983 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E660CC02A3AFD1F00BC6983 /* AudioPlayer.swift */; };
@@ -38,6 +39,7 @@
 		84571FE5258FE29C009AC936 /* BriefCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84571FE4258FE29C009AC936 /* BriefCase.swift */; };
 		845F2E5F221C62E200A48C1A /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845F2E5E221C62E200A48C1A /* Reachability.swift */; };
 		846606C121AA3CA00049814C /* ReadWriteText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846606C021AA3CA00049814C /* ReadWriteText.swift */; };
+		DA20260612000000000000B2 /* CycleCSVExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA20260612000000000000B1 /* CycleCSVExport.swift */; };
 		846606C321AA5C380049814C /* MapViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846606C221AA5C380049814C /* MapViewController.swift */; };
 		84712D582597C874006F31E4 /* Briefcase.csv in Resources */ = {isa = PBXBuildFile; fileRef = 84712D572597C874006F31E4 /* Briefcase.csv */; };
 		84712D622597C9FA006F31E4 /* Version 1.2 Briefcase Flowchart.pdf in Resources */ = {isa = PBXBuildFile; fileRef = 84712D612597C9FA006F31E4 /* Version 1.2 Briefcase Flowchart.pdf */; };
@@ -92,6 +94,7 @@
 		5AC96E112A2E09F10022068C /* RestoreLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreLocation.swift; sourceTree = "<group>"; };
 		5C7925A022DE9B1900B981B2 /* LocationDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationDetails.swift; sourceTree = "<group>"; };
 		5CF01FDD22D92F19004604BC /* ToolsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsViewController.swift; sourceTree = "<group>"; };
+		DA20260611000000000000A1 /* DeleteOldCyclesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteOldCyclesViewController.swift; sourceTree = "<group>"; };
 		5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveLocations.swift; sourceTree = "<group>"; };
 		5E4D12732A2776E9002E4D91 /* Slac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Slac.swift; sourceTree = "<group>"; };
 		5E660CC02A3AFD1F00BC6983 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
@@ -116,6 +119,7 @@
 		84571FE4258FE29C009AC936 /* BriefCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefCase.swift; sourceTree = "<group>"; };
 		845F2E5E221C62E200A48C1A /* Reachability.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Reachability.swift; sourceTree = "<group>"; };
 		846606C021AA3CA00049814C /* ReadWriteText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadWriteText.swift; sourceTree = "<group>"; };
+		DA20260612000000000000B1 /* CycleCSVExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CycleCSVExport.swift; sourceTree = "<group>"; };
 		846606C221AA5C380049814C /* MapViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewController.swift; sourceTree = "<group>"; };
 		846D6B4F2170160E008E003D /* LocationApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocationApp.entitlements; sourceTree = "<group>"; };
 		84712D572597C874006F31E4 /* Briefcase.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = Briefcase.csv; sourceTree = "<group>"; };
@@ -310,6 +314,7 @@
 			isa = PBXGroup;
 			children = (
 				846606C021AA3CA00049814C /* ReadWriteText.swift */,
+				DA20260612000000000000B1 /* CycleCSVExport.swift */,
 			);
 			path = "Text File";
 			sourceTree = "<group>";
@@ -318,6 +323,7 @@
 			isa = PBXGroup;
 			children = (
 				5CF01FDD22D92F19004604BC /* ToolsViewController.swift */,
+				DA20260611000000000000A1 /* DeleteOldCyclesViewController.swift */,
 				84571FE4258FE29C009AC936 /* BriefCase.swift */,
 				5CFF888A22CAA5B700611F60 /* ActiveLocations.swift */,
 				5C7925A022DE9B1900B981B2 /* LocationDetails.swift */,
@@ -514,6 +520,7 @@
 				5A5EFD752A306ED500547EB8 /* DIContainer.swift in Sources */,
 				E404C0C52A124558000D2D14 /* Cache.swift in Sources */,
 				5CF01FDE22D92F19004604BC /* ToolsViewController.swift in Sources */,
+				DA20260611000000000000A2 /* DeleteOldCyclesViewController.swift in Sources */,
 				84F477962167173A00A63336 /* LocationApp.xcdatamodeld in Sources */,
 				E465C7C62A1CC9E600B7465B /* UpdateGroups.swift in Sources */,
 				84B58D4D21FD69C80013D5F3 /* UploadToCloud.swift in Sources */,
@@ -530,6 +537,7 @@
 				5A38B45C2A5D790700489795 /* PhotoViewController.swift in Sources */,
 				449A7E9D271341B2005AF1F7 /* LocationRecordCacheItem.swift in Sources */,
 				846606C121AA3CA00049814C /* ReadWriteText.swift in Sources */,
+				DA20260612000000000000B2 /* CycleCSVExport.swift in Sources */,
 				8487FE3021A8F9C700CC62E8 /* StartupViewController.swift in Sources */,
 				5E4D12742A2776E9002E4D91 /* Slac.swift in Sources */,
 				5A5EFD742A306ED500547EB8 /* SettingsService.swift in Sources */,
