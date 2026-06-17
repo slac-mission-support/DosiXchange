@@ -651,6 +651,51 @@ class LocationAppTests: XCTestCase {
                        "Header + one row + End of File + the trailing newline's empty component")
     }
 
+    // MARK: - Tools "email data" export nil-date crash
+
+    // recordFetchedBlock builds each CSV line for the Tools "email data" export. It
+    // used to force-unwrap the CKRecord system dates, which are nil for unsynced or
+    // orphan records — one such record crashed the whole export. These pin nil-safety.
+
+    func test_recordFetchedBlock_withNilSystemDates_doesNotCrashAndBlanksDateCells() throws {
+        let tools = ToolsViewController()
+        let record = try makeItem(recordName: "ghost-record")
+        XCTAssertNil(record.creationDate, "Precondition: the record must lack a system creation date")
+        XCTAssertNil(record.modificationDate, "Precondition: the record must lack a system modification date")
+
+        tools.recordFetchedBlock(record: record) // must not crash on the missing dates
+
+        // The row is produced (no crash), and the two system-date columns it used
+        // to force-unwrap (9 = deployed, 10 = collected) render as blank cells.
+        let cells = tools.csvText.components(separatedBy: ",")
+        XCTAssertEqual(cells.count, 17, "The export row must keep all 17 columns even with missing dates")
+        XCTAssertEqual(cells[0], "Q")
+        XCTAssertEqual(cells[9], "", "A nil system deploy date must be a blank cell, not a crash")
+        XCTAssertEqual(cells[10], "", "A nil system collected date must be a blank cell, not a crash")
+        XCTAssertEqual(cells[14], "ghost-record", "The record ID column must still render")
+    }
+
+    func test_recordFetchedBlock_withSystemDates_rendersFormattedDates() throws {
+        let deployed = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 5))
+        let collected = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 10))
+        let json = """
+        { "QRCode": "BLG 006-015", "latitude": "37.4", "longitude": "-122.2", \
+        "locdescription": "north gate", "active": 1, \
+        "creationDate": \(deployed.timeIntervalSinceReferenceDate), \
+        "modificationDate": \(collected.timeIntervalSinceReferenceDate), \
+        "recordName": "rec-1", "hasPhoto": false }
+        """
+        let record = try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
+
+        let tools = ToolsViewController()
+        tools.recordFetchedBlock(record: record)
+
+        // Columns 9 and 10 are the system deploy/collected dates (MM/dd/yyyy).
+        let cells = tools.csvText.components(separatedBy: ",")
+        XCTAssertEqual(cells[9], "06/05/2026", "System deploy date must still render when present")
+        XCTAssertEqual(cells[10], "06/10/2026", "System collected date must still render when present")
+    }
+
     /// Noon local time avoids DST-edge surprises when the exporter formats
     /// the date back in the current calendar.
     private func noonLocal(year: Int, month: Int, day: Int) -> Date? {
