@@ -9,7 +9,6 @@
 import Foundation
 import UIKit
 import MessageUI
-import AVFoundation
 //MARK:  Class
 class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate {
     
@@ -244,10 +243,7 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     
     
     func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-        
-        //Play email sent sound
-        let systemSoundID: SystemSoundID =  1001
-        AudioServicesPlaySystemSound(systemSoundID)
+        //MFMailComposeViewController already plays the sent sound itself; don't double it.
         controller.dismiss(animated: true)
     } //end func mailComposeController
     

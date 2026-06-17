@@ -368,6 +368,13 @@
                                 <color key="textColor" red="0.88717480959999995" green="0.88717480959999995" blue="0.88717480959999995" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="RfC-rf-cnt">
+                                <rect key="frame" x="114" y="487" width="200" height="44"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="26"/>
+                                <state key="normal" title="Refresh Count">
+                                    <color key="titleColor" red="0.88717480959999995" green="0.88717480959999995" blue="0.88717480959999995" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                </state>
+                            </button>
                             <label opaque="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Version 1.3" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="zuC-3j-mde">
                                 <rect key="frame" x="179" y="860" width="70.333333333333314" height="17"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
@@ -378,6 +385,9 @@
                         <viewLayoutGuide key="safeArea" id="QGn-nO-09E"/>
                         <color key="backgroundColor" red="0.58075547220000001" green="0.065336786209999997" blue="0.00062786263879999996" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
+                            <constraint firstItem="RfC-rf-cnt" firstAttribute="leading" secondItem="QGn-nO-09E" secondAttribute="centerX" constant="-100" id="RfC-ld-001"/>
+                            <constraint firstItem="RfC-rf-cnt" firstAttribute="trailing" secondItem="QGn-nO-09E" secondAttribute="centerX" constant="100" id="RfC-tr-001"/>
+                            <constraint firstItem="RfC-rf-cnt" firstAttribute="top" secondItem="Yg7-fX-lCZ" secondAttribute="bottom" constant="24" id="RfC-tp-001"/>
                             <constraint firstItem="C5U-sR-g2Z" firstAttribute="top" secondItem="HdU-d6-efg" secondAttribute="bottom" constant="38" id="3u2-P5-4h2"/>
                             <constraint firstItem="wOM-u4-FVE" firstAttribute="leading" secondItem="QGn-nO-09E" secondAttribute="centerX" constant="-95" id="E3i-Am-1aa"/>
                             <constraint firstItem="dgk-90-ebF" firstAttribute="top" secondItem="wOM-u4-FVE" secondAttribute="bottom" constant="30" id="Gyv-UI-T5R"/>
@@ -410,6 +420,7 @@
                         <outlet property="progressView" destination="C5U-sR-g2Z" id="TAu-KM-Q6h"/>
                         <outlet property="scanButton" destination="wOM-u4-FVE" id="MLU-kG-PiW"/>
                         <outlet property="statusLabel" destination="Yg7-fX-lCZ" id="IB8-3Q-Jxf"/>
+                        <outlet property="refreshButton" destination="RfC-rf-cnt" id="RfC-ou-001"/>
                         <outlet property="versionLabel" destination="zuC-3j-mde" id="Qi6-dP-Vjw"/>
                         <segue destination="M89-R5-CVf" kind="show" identifier="segueToTools" id="zta-o7-k1W"/>
                     </connections>
