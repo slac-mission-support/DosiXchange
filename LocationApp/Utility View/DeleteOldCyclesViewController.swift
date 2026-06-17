@@ -8,7 +8,6 @@
 import Foundation
 import UIKit
 import MessageUI
-import AVFoundation
 
 //MARK:  Class
 
@@ -270,9 +269,7 @@ extension DeleteOldCyclesViewController: MFMailComposeViewControllerDelegate {
         switch result {
         case .sent:
             hasEmailedExport = true
-            //Same sent sound as the Tools email export.
-            let systemSoundID: SystemSoundID = 1001
-            AudioServicesPlaySystemSound(systemSoundID)
+            //MFMailComposeViewController already plays the sent sound itself; don't double it.
             print("Delete Old Cycles: all-cycles export emailed (\(exportedRecordCount) records)")
             tableView.reloadData()
         case .failed:

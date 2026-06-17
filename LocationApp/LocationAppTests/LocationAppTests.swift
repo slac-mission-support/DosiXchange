@@ -797,4 +797,39 @@ class LocationAppTests: XCTestCase {
     func test_exportRecipient_isTheRecordsManagementGroup() {
         XCTAssertEqual(DeleteOldCyclesViewController.exportRecipient, "esh-DREP@slac.stanford.edu")
     }
+
+    // MARK: - Refresh Count button wiring
+
+    // Wired in the storyboard + viewDidLoad with no pure logic, so these load the
+    // startup scene to check the button's outlet, title, and action and that the old
+    // hidden tap is gone. Loading runs viewDidLoad; we stop the notifier right after.
+
+    private func loadStartupViewController() throws -> StartupViewController {
+        let storyboard = UIStoryboard(name: "Main", bundle: Bundle(for: StartupViewController.self))
+        let controller = storyboard.instantiateViewController(withIdentifier: "Main")
+        let startup = try XCTUnwrap(controller as? StartupViewController,
+                                    "Main storyboard identifier \"Main\" should resolve to StartupViewController")
+        startup.loadViewIfNeeded()
+        startup.reachability.stopNotifier()
+        return startup
+    }
+
+    func test_refreshCountButton_isConnectedAndCallsSetProgress() throws {
+        let startup = try loadStartupViewController()
+
+        let button = try XCTUnwrap(startup.refreshButton,
+                                   "refreshButton outlet must be connected in Main.storyboard")
+        XCTAssertEqual(button.title(for: .normal), "Refresh Count")
+
+        let actions = button.actions(forTarget: startup, forControlEvent: .touchUpInside) ?? []
+        XCTAssertTrue(actions.contains("setProgress"),
+                      "Refresh Count button must trigger setProgress on touchUpInside")
+    }
+
+    func test_statusLabel_noLongerHasHiddenTapToRefresh() throws {
+        let startup = try loadStartupViewController()
+
+        XCTAssertTrue((startup.statusLabel.gestureRecognizers ?? []).isEmpty,
+                      "the hidden tap-to-refresh gesture should be removed from the status label")
+    }
 }

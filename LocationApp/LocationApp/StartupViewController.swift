@@ -31,6 +31,7 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
     @IBOutlet weak var progressView: UIProgressView!
     @IBOutlet weak var statusLabel: UILabel!
+    @IBOutlet weak var refreshButton: UIButton!
     
     @IBOutlet weak var versionLabel: UILabel!
     @IBOutlet weak var Tools: UIImageView!
@@ -67,10 +68,11 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
         Tools.isUserInteractionEnabled = true
         Tools.addGestureRecognizer(toolsTap)
         
-        //tap to refresh status
-        let statusTap = UITapGestureRecognizer(target: self, action: #selector(setProgress))
-        statusLabel.isUserInteractionEnabled = true
-        statusLabel.addGestureRecognizer(statusTap)
+        //refresh count button (replaces the hidden tap-to-refresh on the status label)
+        refreshButton.layer.borderWidth = 1.5
+        refreshButton.layer.borderColor = borderColorUp
+        refreshButton.layer.cornerRadius = 22
+        refreshButton.addTarget(self, action: #selector(setProgress), for: .touchUpInside)
         
         // Do any additional setup after loading the view, typically from a nib.
         // Detect Wifi:
