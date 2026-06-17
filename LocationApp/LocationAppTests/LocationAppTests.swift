@@ -843,6 +843,45 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(DeleteOldCyclesViewController.exportRecipient, "esh-DREP@slac.stanford.edu")
     }
 
+    // MARK: - Super-user passcode gate (shared by Reset Cache + Delete Old Cycles + Edit Record)
+
+    // passcodeAccepted is the pure decision the shared gate consults. It must
+    // accept only the exact configured passcode and reject empty, non-numeric,
+    // or wrong input — the same check guards Reset Cache and Edit Record saves.
+    func test_passcodeAccepted_trueOnlyForExactConfiguredValue() {
+        XCTAssertTrue(SuperUserGate.passcodeAccepted(entered: "4299", configured: 4299))
+        XCTAssertFalse(SuperUserGate.passcodeAccepted(entered: "4298", configured: 4299),
+                       "A wrong passcode must not open the gate")
+    }
+
+    func test_passcodeAccepted_rejectsEmptyAndNonNumericInput() {
+        for rejected in [nil, "", " ", "abc", "42x", "4299 "] {
+            XCTAssertFalse(SuperUserGate.passcodeAccepted(entered: rejected, configured: 4299),
+                           "\(String(describing: rejected)) must not open the gate")
+        }
+    }
+
+    func test_passcodeAccepted_honorsRotatedPasscode() {
+        // The configured value comes from settings.superUserPasscodeValue, which
+        // CloudKit can rotate; the gate must follow it, not a hardcoded default.
+        XCTAssertTrue(SuperUserGate.passcodeAccepted(entered: "8121", configured: 8121))
+        XCTAssertFalse(SuperUserGate.passcodeAccepted(entered: "4299", configured: 8121),
+                       "The old default must stop working once the passcode is rotated")
+    }
+
+    // Once-per-session unlock: the flag must be app-wide (a static), so it
+    // survives LocationDetails being re-instantiated per navigation.
+    func test_editRecordSavesUnlocked_isAppWideSessionFlag() {
+        let original = SuperUserGate.editRecordSavesUnlocked
+        defer { SuperUserGate.editRecordSavesUnlocked = original }
+
+        SuperUserGate.editRecordSavesUnlocked = false
+        XCTAssertFalse(SuperUserGate.editRecordSavesUnlocked)
+        SuperUserGate.editRecordSavesUnlocked = true
+        XCTAssertTrue(SuperUserGate.editRecordSavesUnlocked,
+                      "Once unlocked, Edit Record saves stay unlocked for the rest of the session")
+    }
+
     // MARK: - Refresh Count button wiring
 
     // Wired in the storyboard + viewDidLoad with no pure logic, so these load the
