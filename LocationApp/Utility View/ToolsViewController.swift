@@ -332,13 +332,17 @@ extension ToolsViewController {
         
         //system dates - createdDate and modifiedDate Ver 1.2
         
-        //block 3: these fields always have a value and are called differently than my date fields
-        let date = Date(timeInterval: 0, since: record.creationDate!)
-        //let date = Date(timeInterval: 0, since: record["createdDate"] as! Date) //Ver 1.2
-        let formattedDate = dateFormatter.string(from: date)
-        let dateModified = Date(timeInterval: 0, since: record.modificationDate!)
-        //let dateModified = Date(timeInterval: 0, since: record["modifiedDate"] as! Date)
-        let formattedDateModified = dateFormatter.string(from: dateModified)
+        //block 3: system dates - nil for records not yet synced (created offline) or
+        //older orphan records. Render blank instead of force-unwrapping (which crashed
+        //the export); same blank-cell behavior as CycleCSVExport.
+        var formattedDate = ""
+        if let creationDate = record.creationDate {
+            formattedDate = dateFormatter.string(from: Date(timeInterval: 0, since: creationDate))
+        }
+        var formattedDateModified = ""
+        if let modificationDate = record.modificationDate {
+            formattedDateModified = dateFormatter.string(from: Date(timeInterval: 0, since: modificationDate))
+        }
         
         //block 4: may not have a value when initially set up and tested
         //but will eventually always have a value
@@ -358,7 +362,7 @@ extension ToolsViewController {
             myDateModified = Date(timeInterval: -1E15, since: Date())
         }
         let myformattedDateModified = dateFormatter.string(from: myDateModified!)
-        let recordID = record.recordName!
+        let recordID = record.recordName ?? ""
         let modifiedBy = record.modifiedBy ?? ""
         let group = record.reportGroup ?? ""
         
