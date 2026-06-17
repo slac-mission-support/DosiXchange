@@ -410,13 +410,25 @@ extension LocationDetails: UITextFieldDelegate {
     
     @IBAction func popupSave(_ sender: Any) {
         if(pDosimeter.text != nil && self.validateDosimeterField(value: pDosimeter.text!)){
-            view.endEditing(true)
-            savePopupRecord()
-            self.dismiss(animated: true)
+            //Gate the save behind the super-user passcode, once per app session.
+            if SuperUserGate.editRecordSavesUnlocked {
+                commitPopupSave()
+            } else {
+                requireSuperUserPasscode(message: "Enter the passcode to save changes.") {
+                    SuperUserGate.editRecordSavesUnlocked = true
+                    self.commitPopupSave()
+                }
+            }
         } else {
             self.showDosimeterValidationWarning()
         }
-        
+
+    }
+
+    func commitPopupSave() {
+        view.endEditing(true)
+        savePopupRecord()
+        self.dismiss(animated: true)
     }
     
     func savePopupRecord() {
