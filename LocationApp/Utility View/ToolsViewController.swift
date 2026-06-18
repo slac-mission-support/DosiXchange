@@ -260,7 +260,7 @@ extension ToolsViewController {
         //set first line of text file
         //should separate text file from query
         dispatchGroup.enter()
-        self.csvText = "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,Mismatch (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n"
+        self.csvText = "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,RGD (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n"
         
         var filter: ((LocationRecordCacheItem) -> Bool) = { l in l.createdDate != nil }
         if cycles > 0 {

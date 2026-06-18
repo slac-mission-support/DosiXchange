@@ -768,7 +768,7 @@ extension ScannerViewController {  //alerts
             self.alert11a()
         }
         
-        let mismatch = UIAlertAction(title: "Mismatch", style: .default) { (_) in
+        let mismatch = UIAlertAction(title: "RGD", style: .default) { (_) in
             self.alert3a()
         }
         
@@ -794,7 +794,7 @@ extension ScannerViewController {  //alerts
             self.alert11()
         }
         
-        let mismatch = UIAlertAction(title: "Mismatch", style: .default) { (_) in
+        let mismatch = UIAlertAction(title: "RGD", style: .default) { (_) in
             self.alert3i() //reopen alert
         }
         
