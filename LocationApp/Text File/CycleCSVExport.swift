@@ -15,7 +15,7 @@ import Foundation
 //is a complete audit copy of anything a delete could touch.
 struct CycleCSVExport {
 
-    static let header = "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,Mismatch (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n"
+    static let header = "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,RGD (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n"
 
     //Whole-file build: header, one row per record (QRCode ascending, newest
     //deploy first within a QRCode — same ordering as the Tools export), then

@@ -576,8 +576,21 @@ class LocationAppTests: XCTestCase {
 
     func test_csvHeader_matchesTheToolsExportColumns() {
         XCTAssertEqual(CycleCSVExport.header,
-                       "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,Mismatch (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n",
+                       "LocationID (QRCode),Latitude,Longitude,Description,Moderator (0/1),Active (0/1),Dosimeter,Collected Flag (0/1),Wear Period,System_Date Deployed,System_Date Collected,RGD (0/1), my_Date Deployed, my_Date Collected, recordID, ModifiedBy, Report Group\n",
                        "Header must stay column-compatible with the Tools email export")
+    }
+
+    // Pins the Mismatch -> RGD relabel. Display-only: the exported column header
+    // reads "RGD", but the backend CKRecord key stays "mismatch" (see the to()
+    // round-trip test, which asserts server["mismatch"]).
+    func test_csvHeader_usesRGDLabel() {
+        XCTAssertTrue(CycleCSVExport.header.contains("RGD (0/1)"),
+                      "Exported header should expose the column as \"RGD (0/1)\"")
+    }
+
+    func test_csvHeader_dropsOldMismatchLabel() {
+        XCTAssertFalse(CycleCSVExport.header.contains("Mismatch"),
+                       "The old \"Mismatch\" label must not appear in the exported header")
     }
 
     func test_row_rendersEveryFieldInColumnOrder() throws {
