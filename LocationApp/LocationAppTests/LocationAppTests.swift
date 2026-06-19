@@ -1101,4 +1101,34 @@ class LocationAppTests: XCTestCase {
         fields.first?.sendActions(for: .editingChanged)
         XCTAssertEqual(reported, "lab 12", "Editing should report the new text via onChange")
     }
+
+    // The Deploy popup (alert8) carries two independent switch rows — Moderator
+    // (variables.moderator) and RGD (variables.mismatch) — each reporting only its
+    // own flips; a cross-wire would corrupt the other field. Order matches alert8.
+    func test_popup_twoSwitchesAreIndependent() {
+        var moderatorReported: Bool?
+        var rgdReported: Bool?
+        let popup = PopupAlertController(title: "Deploy Dosimeter:", message: "\nLocation: BLG 044-004")
+        popup.addTextField(text: "ryans office", placeholder: "Location") { _ in }
+        popup.addSwitch(title: "Moderator", isOn: false) { moderatorReported = $0 }
+        popup.addSwitch(title: "RGD", isOn: true) { rgdReported = $0 }
+        popup.addAction(PopupAction(title: "Save"))
+        popup.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        popup.view.layoutIfNeeded()
+
+        let found = switches(in: popup.view)
+        XCTAssertEqual(found.count, 2, "Deploy should render exactly two UISwitches")
+        XCTAssertEqual(found.first?.isOn, false, "Moderator should reflect its initial off state")
+        XCTAssertEqual(found.last?.isOn, true, "RGD should reflect its initial on state")
+
+        found.first?.isOn = true
+        found.first?.sendActions(for: .valueChanged)
+        XCTAssertEqual(moderatorReported, true, "Flipping Moderator should fire only its onChange")
+        XCTAssertNil(rgdReported, "Flipping Moderator must not fire RGD's onChange")
+
+        found.last?.isOn = false
+        found.last?.sendActions(for: .valueChanged)
+        XCTAssertEqual(rgdReported, false, "Flipping RGD should fire its onChange with the new value")
+        XCTAssertEqual(moderatorReported, true, "RGD's flip must not disturb the Moderator value")
+    }
 }

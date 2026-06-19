@@ -892,13 +892,17 @@ extension ScannerViewController {  //alerts
     func alert8() {
         let alert = PopupAlertController(title: "Deploy Dosimeter:\n\(variables.dosiNumber ?? "Nil Dosi")",
                                          message: "\nLocation: \(variables.QRCode ?? "Nil QRCode")")
-        // Location field and Moderator toggle are now proper rows. The field writes
-        // variables.dosiLocation on every edit, so Save and the camera flow read the
-        // current value without the old reopen-the-alert hack or a floated UISwitch.
+        // Location field, Moderator toggle, and RGD toggle are proper rows. The field
+        // writes variables.dosiLocation on every edit, so Save and the camera flow read
+        // the current value without the old reopen-the-alert hack or a floated UISwitch.
         alert.addTextField(text: variables.dosiLocation, placeholder: "Type or dictate location details") {
             variables.dosiLocation = $0
         }
         alert.addSwitch(title: "Moderator", isOn: variables.moderator == 1) { variables.moderator = $0 ? 1 : 0 }
+        // RGD flags a dosimeter placed on a Radiation Generating Device. Same backend
+        // column (mismatch) as the Exchange/Collect RGD toggles; saveDeployedLocation
+        // already persists it.
+        alert.addSwitch(title: "RGD", isOn: variables.mismatch == 1) { variables.mismatch = $0 ? 1 : 0 }
         if reachability.isReachable {
             alert.addAction(PopupAction(title: (self.photo == nil) ? "Add photo" : "Replace photo") { [weak self] in
                 self?.openCamera(tempDesc: variables.dosiLocation)

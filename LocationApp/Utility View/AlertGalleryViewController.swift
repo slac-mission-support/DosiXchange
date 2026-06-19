@@ -143,10 +143,11 @@ final class AlertGalleryViewController: UIViewController {
                 alert.addAction(PopupAction(title: "Cancel", style: .cancel))
                 return alert
             },
-            Demo(name: "alert8 · Deploy Dosimeter (text + switch)") { [self] in
+            Demo(name: "alert8 · Deploy Dosimeter (text + 2 switches)") { [self] in
                 let alert = PopupAlertController(title: "Deploy Dosimeter:\n\(dosi)", message: "\nLocation: \(qr)")
                 alert.addTextField(text: "ryans office", placeholder: "Type or dictate location details") { _ in }
                 alert.addSwitch(title: "Moderator", isOn: false) { _ in }
+                alert.addSwitch(title: "RGD", isOn: false) { _ in }
                 alert.addAction(PopupAction(title: "Add photo"))
                 alert.addAction(PopupAction(title: "Save"))
                 alert.addAction(PopupAction(title: "Cancel", style: .cancel))
