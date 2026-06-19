@@ -108,26 +108,8 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
         }  //end catch
         //end Detect Wifi...
 
-        #if DEBUG
-        // Debug-only: long-press the version label to open the alert gallery for
-        // on-device QA of every pop-up. Excluded from release builds.
-        let galleryPress = UILongPressGestureRecognizer(target: self, action: #selector(showAlertGallery))
-        versionLabel.isUserInteractionEnabled = true
-        versionLabel.addGestureRecognizer(galleryPress)
-        #endif
-
     } //end viewDidLoad
 
-    #if DEBUG
-    @objc private func showAlertGallery(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        let gallery = UINavigationController(rootViewController: AlertGalleryViewController())
-        gallery.modalPresentationStyle = .fullScreen
-        present(gallery, animated: true)
-    }
-    #endif
-    
-    
     override func viewDidAppear(_ animated: Bool) {
         //setProgress()
     }
