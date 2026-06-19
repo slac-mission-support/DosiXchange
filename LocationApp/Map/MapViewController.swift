@@ -156,126 +156,26 @@ extension MapViewController {
     
     //alert to filter pins
     func filtersAlert() {
-        
-        //configure alert message
-        let font1 = [NSAttributedString.Key.font: UIFont(name: "Arial-BoldMT", size: 22)!,
-                     NSAttributedString.Key.paragraphStyle: NSMutableParagraphStyle()]
-        let font2 = [NSAttributedString.Key.font: UIFont(name: "ArialMT", size: 18)!,
-                     NSAttributedString.Key.paragraphStyle: NSMutableParagraphStyle()]
-        let message = NSMutableAttributedString(string: "", attributes: font1)
-        message.append(NSAttributedString(string: "Active\n\n", attributes: font1))
-        message.append(NSAttributedString(string: "\tCurrent Cycle:\n\n\tPrior Cycle:\n\n\tNo Dosimeter:\n\n\n", attributes: font2))
-        message.append(NSAttributedString(string: "Inactive\n\n", attributes: font1))
-        message.append(NSAttributedString(string: "\tCurrent Cycle:\n\n\tPrior Cycle:\n\n\tNo Dosimeter:\n", attributes: font2))
-        
-        //set up alert
-        let alert = UIAlertController.init(title: nil, message: nil, preferredStyle: .alert)
-        alert.setValue(message, forKey: "attributedMessage")
-        let OK = UIAlertAction(title: "OK", style: .default, handler: handlerOK)
-        
-        alert.view.addSubview(redSwitch())
-        alert.view.addSubview(greenSwitch())
-        alert.view.addSubview(orangeSwitch())
-        alert.view.addSubview(purpleSwitch())
-        alert.view.addSubview(blueSwitch())
-        alert.view.addSubview(yellowSwitch())
-        alert.addAction(OK)
-        
+        // Switch rows replace six UISwitches floated at hardcoded frames over a
+        // UIAlertController whose body used the private attributedMessage KVC hack.
+        // Each switch's on-tint is the pin colour it filters; the label is the legend.
+        let alert = PopupAlertController(title: nil, message: nil)
+        alert.addSection(title: "Active")
+        alert.addSwitch(title: "Current Cycle:", isOn: filters[.red] ?? true, color: .red) { [weak self] in self?.filters[.red] = $0 }
+        alert.addSwitch(title: "Prior Cycle:", isOn: filters[.green] ?? true, color: .green) { [weak self] in self?.filters[.green] = $0 }
+        alert.addSwitch(title: "No Dosimeter:", isOn: filters[.orange] ?? false, color: .orange) { [weak self] in self?.filters[.orange] = $0 }
+        alert.addSection(title: "Inactive")
+        alert.addSwitch(title: "Current Cycle:", isOn: filters[.purple] ?? true, color: .purple) { [weak self] in self?.filters[.purple] = $0 }
+        alert.addSwitch(title: "Prior Cycle:", isOn: filters[.blue] ?? true, color: .blue) { [weak self] in self?.filters[.blue] = $0 }
+        alert.addSwitch(title: "No Dosimeter:", isOn: filters[.yellow] ?? false, color: .yellow) { [weak self] in self?.filters[.yellow] = $0 }
+        alert.addAction(PopupAction(title: "OK") { [weak self] in self?.handlerOK(alert: nil) })
+
         DispatchQueue.main.async {
             self.present(alert, animated: true, completion: nil)
         }
     }
     
     
-    //RED PINS - current cycle, active (stop)
-    func redSwitch() -> UISwitch {
-        let redSwitch = UISwitch(frame: CGRect(x: 170, y: 62, width: 0, height: 0))
-        redSwitch.onTintColor = UIColor.red
-        redSwitch.tintColor = UIColor.gray
-        redSwitch.setOn(filters[.red]!, animated: false)
-        redSwitch.addTarget(self, action: #selector(redSwitchDidChange(_:)), for: .valueChanged)
-        return redSwitch
-    }
-    
-    @objc func redSwitchDidChange(_ sender: UISwitch!) {
-        filters[.red] = sender.isOn
-    }
-    
-    //GREEN PINS - prior cycle, active (exchange)
-    func greenSwitch() -> UISwitch {
-        let greenSwitch = UISwitch(frame: CGRect(x: 170, y: 102, width: 0, height: 0))
-        greenSwitch.onTintColor = UIColor.green
-        greenSwitch.tintColor = UIColor.gray
-        greenSwitch.setOn(filters[.green]!, animated: false)
-        greenSwitch.addTarget(self, action: #selector(greenSwitchDidChange(_:)), for: .valueChanged)
-        return greenSwitch
-    }
-    
-    @objc func greenSwitchDidChange(_ sender: UISwitch!) {
-        filters[.green] = sender.isOn
-    }
-    
-    
-    //ORANGE PINS - active, no dosimeter (deploy)
-    func orangeSwitch() -> UISwitch {
-        let orangeSwitch = UISwitch(frame: CGRect(x: 170, y: 142, width: 0, height: 0))
-        orangeSwitch.onTintColor = UIColor.orange
-        orangeSwitch.tintColor = UIColor.gray
-        orangeSwitch.setOn(filters[.orange]!, animated: false)
-        orangeSwitch.addTarget(self, action: #selector(orangeSwitchDidChange(_:)), for: .valueChanged)
-        return orangeSwitch
-    }
-    
-    @objc func orangeSwitchDidChange(_ sender: UISwitch!) {
-        filters[.orange] = sender.isOn
-    }
-    
-    
-    //PURPLE PINS - current cycle, inactive (stop)
-    func purpleSwitch() -> UISwitch {
-        let purpleSwitch = UISwitch(frame: CGRect(x: 170, y: 251, width: 0, height: 0))
-        purpleSwitch.onTintColor = UIColor.purple
-        purpleSwitch.tintColor = UIColor.gray
-        purpleSwitch.setOn(filters[.purple]!, animated: false)
-        purpleSwitch.addTarget(self, action: #selector(purpleSwitchDidChange(_:)), for: .valueChanged)
-        return purpleSwitch
-    }
-    
-    @objc func purpleSwitchDidChange(_ sender: UISwitch!) {
-        filters[.purple] = sender.isOn
-    }
-    
-    
-    //BLUE PINS - prior cycle, inactive (collect)
-    func blueSwitch() -> UISwitch {
-        let blueSwitch = UISwitch(frame: CGRect(x: 170, y: 291, width: 0, height: 0))
-        blueSwitch.onTintColor = UIColor.blue
-        blueSwitch.tintColor = UIColor.gray
-        blueSwitch.setOn(filters[.blue]!, animated: false)
-        blueSwitch.addTarget(self, action: #selector(blueSwitchDidChange(_:)), for: .valueChanged)
-        return blueSwitch
-    }
-    
-    @objc func blueSwitchDidChange(_ sender: UISwitch!) {
-        filters[.blue] = sender.isOn
-    }
-    
-    
-    //YELLOW PINS - inactive, no dosimeter
-    func yellowSwitch() -> UISwitch {
-        let yellowSwitch = UISwitch(frame: CGRect(x: 170, y: 331, width: 0, height: 0))
-        yellowSwitch.onTintColor = UIColor.yellow
-        yellowSwitch.tintColor = UIColor.gray
-        yellowSwitch.setOn(filters[.yellow]!, animated: false)
-        yellowSwitch.addTarget(self, action: #selector(yellowSwitchDidChange(_:)), for: .valueChanged)
-        return yellowSwitch
-    }
-    
-    @objc func yellowSwitchDidChange(_ sender: UISwitch!) {
-        filters[.yellow] = sender.isOn
-    }
-    
-
     func handlerOK(alert: UIAlertAction!) {
         self.activityIndicator.startAnimating()
         queryForMap()
