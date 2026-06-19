@@ -961,6 +961,23 @@ class LocationAppTests: XCTestCase {
                        "Each PopupAction should render one button, in the order added")
     }
 
+    // The simple scanner alerts (alert1/alert2 etc.) are now PopupAlertControllers
+    // with a title, no message, and two buttons. A nil message must not drop the
+    // title or the buttons — guards the native-alert conversion.
+    func test_popup_titleOnlyWithTwoActionsBuildsBothButtonsAndTitle() {
+        let popup = PopupAlertController(title: "Dosimeter Not Found:\n21111111116", message: nil)
+        popup.addAction(PopupAction(title: "Deploy"))
+        popup.addAction(PopupAction(title: "Cancel", style: .cancel))
+        popup.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        popup.view.layoutIfNeeded()
+
+        let titles = buttons(in: popup.view).map { $0.title(for: .normal) }
+        XCTAssertEqual(titles, ["Deploy", "Cancel"],
+                       "A title-only popup should still build both buttons in order")
+        let hasTitle = labels(in: popup.view).contains { ($0.text ?? "").hasPrefix("Dosimeter Not Found") }
+        XCTAssertTrue(hasTitle, "The title must render even when the message is nil")
+    }
+
     func test_popup_buildsWithASingleActionAndImage() {
         let popup = PopupAlertController(title: "Scan Accepted", message: "Please scan.")
         popup.setImage(UIImage())

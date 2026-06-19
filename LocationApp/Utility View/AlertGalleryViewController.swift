@@ -198,26 +198,64 @@ final class AlertGalleryViewController: UIViewController {
             }
         ])
 
-        let native = Section(title: "Native (not yet refactored — for comparison)", demos: [
+        // Plain title/message/button alerts, now PopupAlertController too so the whole
+        // scan flow shares one look. These have no images or switches to lay out.
+        let simple = Section(title: "Refactored — simple alerts", demos: [
             Demo(name: "alert1 · Dosimeter Not Found") { [self] in
-                let alert = UIAlertController(title: "Dosimeter Not Found:\n\(dosi)", message: nil, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "Deploy", style: .default))
-                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                return alert
+                popup(title: "Dosimeter Not Found:\n\(dosi)", message: nil,
+                      actions: [PopupAction(title: "Deploy"),
+                                PopupAction(title: "Cancel", style: .cancel)])
             },
-            Demo(name: "alert9 · Save Successful") { [self] in
-                let alert = UIAlertController(title: "Save Successful!", message: "QR Code: \(qr)\nDosimeter: \(dosi)", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                return alert
+            Demo(name: "alert2 · New Location (deploy/cancel)") { [self] in
+                popup(title: "New Location:\n\(qr)", message: nil,
+                      actions: [PopupAction(title: "Deploy"),
+                                PopupAction(title: "Cancel", style: .cancel)])
             },
-            Demo(name: "alert15 · GPS Coordinate Error") {
-                let alert = UIAlertController(title: "GPS Coordinate Error\n", message: "Your fix is not on SLAC property.  Please tap Try Again.", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "Try Again", style: .cancel))
-                return alert
+            Demo(name: "alert2a · Inactive Location") { [self] in
+                popup(title: "Inactive Location:\n\(qr)",
+                      message: "Please activate this location to deploy a dosimeter.",
+                      actions: [PopupAction(title: "OK")])
+            },
+            Demo(name: "alert9 · Invalid Barcode Type") { [self] in
+                popup(title: "Invalid Barcode Type",
+                      message: "Please scan either a location barcode or a dosimeter.",
+                      actions: [PopupAction(title: "OK", style: .cancel)])
+            },
+            Demo(name: "alert9a · Invalid Dosimeter") { [self] in
+                popup(title: "Invalid Dosimeter:\n\(dosi)",
+                      message: "This dosimeter has already been collected.",
+                      actions: [PopupAction(title: "OK", style: .cancel)])
+            },
+            Demo(name: "alert10 · Save Successful") { [self] in
+                popup(title: "Save Successful!", message: "QR Code: \(qr)\nDosimeter: \(dosi)",
+                      actions: [PopupAction(title: "OK")])
+            },
+            Demo(name: "alert11 · Collection Successful") { [self] in
+                popup(title: "Collection Successful!", message: "QR Code: \(qr)\nDosimeter: \(dosi)",
+                      actions: [PopupAction(title: "OK")])
+            },
+            Demo(name: "alert12 · Invalid code (rescan)") { [self] in
+                popup(title: "Invalid code", message: "Invalid barcode, please rescan!",
+                      actions: [PopupAction(title: "Rescan")])
+            },
+            Demo(name: "alert14 · Invalid length (rescan)") { [self] in
+                popup(title: "Invalid length",
+                      message: "The length of the dosimeter barcodes must be 8 characters. Please rescan!",
+                      actions: [PopupAction(title: "Rescan")])
+            },
+            Demo(name: "alert15 · GPS Coordinate Error") { [self] in
+                popup(title: "GPS Coordinate Error",
+                      message: "Your fix is not on SLAC property.  Please tap Try Again.",
+                      actions: [PopupAction(title: "Try Again", style: .cancel)])
+            },
+            Demo(name: "Scanning not supported") { [self] in
+                popup(title: "Scanning not supported",
+                      message: "Your device does not support scanning a code from an item. Please use a device with a camera.",
+                      actions: [PopupAction(title: "OK")])
             }
         ])
 
-        return [refactored, stress, native]
+        return [refactored, simple, stress]
     }
 }
 
