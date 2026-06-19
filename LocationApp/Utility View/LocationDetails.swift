@@ -72,8 +72,12 @@ class LocationDetails: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        
+
+        // The activity indicator only signals an in-progress Edit Record save
+        // (savePopupRecord). Make sure it starts at rest; hidesWhenStopped keeps
+        // it invisible until a save actually runs.
+        activityIndicator.stopAnimating()
+
         if #available(iOS 13.0, *) {
             overrideUserInterfaceStyle = .light
         } else {
