@@ -1196,11 +1196,43 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(mock.filterCallCount, 1, "pull must re-filter after syncing")
         XCTAssertTrue(mock.syncedBeforeFilter, "sync must run before the re-filter")
     }
+
+    // MARK: - Map refresh button (cloud sync)
+
+    // The Map only read the local cache (queryForMap), so its pins could be stale
+    // until something else synced. The new Refresh button must run synchronize()
+    // (a real CloudKit pull) BEFORE re-querying the cache to redraw the pins.
+
+    private func loadMapViewController() throws -> MapViewController {
+        let storyboard = UIStoryboard(name: "Main", bundle: Bundle(for: MapViewController.self))
+        let controller = storyboard.instantiateViewController(withIdentifier: "Map")
+        let map = try XCTUnwrap(controller as? MapViewController,
+                                "Main storyboard identifier \"Map\" should resolve to MapViewController")
+        map.loadViewIfNeeded()
+        map.locationmanager.stopUpdatingLocation()
+        return map
+    }
+
+    func test_mapRefresh_syncsFromCloudBeforeReQuerying() throws {
+        let map = try loadMapViewController()
+        let mock = RefreshSpyLocations()
+        map.locations = mock
+
+        let requeried = expectation(description: "re-query ran after sync")
+        mock.onFilter = { requeried.fulfill() }
+
+        map.refreshMapFromCloud(self)
+
+        wait(for: [requeried], timeout: 2.0)
+        XCTAssertEqual(mock.synchronizeCallCount, 1, "refresh must trigger a cloud sync")
+        XCTAssertEqual(mock.filterCallCount, 1, "refresh must re-query the cache after syncing")
+        XCTAssertTrue(mock.syncedBeforeFilter, "sync must run before the re-query")
+    }
 }
 
 // Minimal Locations test double. Records the order of synchronize()/filter() so the
-// pull-to-refresh test can assert the cloud sync happens before the local re-filter.
-// Every other protocol member is an inert stub; the refresh path never calls them.
+// Nearest pull-to-refresh and Map refresh tests can assert the cloud sync happens
+// before the local re-filter. Every other protocol member is an inert stub.
 private final class RefreshSpyLocations: Locations {
     var synchronizeCallCount = 0
     var filterCallCount = 0
