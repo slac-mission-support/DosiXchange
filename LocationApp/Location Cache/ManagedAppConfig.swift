@@ -16,9 +16,9 @@ enum ManagedAppConfig {
     static let managedConfigKey = "com.apple.configuration.managed"
 
     /// Key inside the managed-config dictionary that holds the worker's name.
-    /// PLACEHOLDER — must match the JAMF payload key SLAC defines for the rollout.
-    /// Examples: "userDisplayName", "username", "fullName", "assignedUser".
-    static let usernameKey = "userDisplayName"
+    /// Matches the SLAC JAMF payload: `workerName` carries JAMF's `$USERNAME`,
+    /// which on the Azure-enrolled iPads resolves to the user's UPN (an email).
+    static let usernameKey = "workerName"
 
     /// Pure decision: extract the username from a managed-config dictionary.
     /// Trims whitespace; returns "" when the key is absent, empty, or not a String.
