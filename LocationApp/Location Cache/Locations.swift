@@ -505,27 +505,11 @@ class LocationsCK : Locations, SettingsService {
         database.add(operation)
     }
     
+    // Reads the field-worker username from the MDM (JAMF) managed app config.
+    // Replaces the deprecated CloudKit user-discovery path (requestApplicationPermission
+    // / discoverUserIdentity); blank on unmanaged devices that carry no MDM payload.
     private func setUser(completionHandler: @escaping (String) -> Void) {
-        DispatchQueue.main.async {
-            CKContainer.default().requestApplicationPermission(.userDiscoverability) { (status, error) in
-                if let error = error {
-                    print(error.localizedDescription)
-                }
-                if status == .granted {
-                        CKContainer.default().fetchUserRecordID { (record, error) in
-                            CKContainer.default().discoverUserIdentity(withUserRecordID: record!, completionHandler: { (userID, error) in
-                                if let givenName = userID?.nameComponents?.givenName, let familyName = userID?.nameComponents?.familyName {
-                                    completionHandler("\(givenName) \(familyName)")
-                                }
-                                else {
-                                    completionHandler(userID?.lookupInfo?.emailAddress ?? "")
-                                }
-                            })
-                        }
-                    }
-                completionHandler("")
-            }
-        }
+        completionHandler(ManagedAppConfig.currentUsername())
     }
     
     private func updateSettings() {

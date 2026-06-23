@@ -1148,4 +1148,30 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(rgdReported, false, "Flipping RGD should fire its onChange with the new value")
         XCTAssertEqual(moderatorReported, true, "RGD's flip must not disturb the Moderator value")
     }
+
+    // MARK: - ManagedAppConfig (JAMF managed username)
+
+    func test_username_readsConfiguredKey() {
+        let config: [String: Any] = [ManagedAppConfig.usernameKey: "Jane Tech"]
+        XCTAssertEqual(ManagedAppConfig.username(from: config), "Jane Tech")
+    }
+
+    func test_username_trimsWhitespace() {
+        let config: [String: Any] = [ManagedAppConfig.usernameKey: "  Jane Tech \n"]
+        XCTAssertEqual(ManagedAppConfig.username(from: config), "Jane Tech")
+    }
+
+    func test_username_blankWhenPayloadMissing() {
+        XCTAssertEqual(ManagedAppConfig.username(from: nil), "")
+    }
+
+    func test_username_blankWhenKeyAbsent() {
+        let config: [String: Any] = ["someOtherKey": "value"]
+        XCTAssertEqual(ManagedAppConfig.username(from: config), "")
+    }
+
+    func test_username_blankWhenValueNotString() {
+        let config: [String: Any] = [ManagedAppConfig.usernameKey: 42]
+        XCTAssertEqual(ManagedAppConfig.username(from: config), "")
+    }
 }
