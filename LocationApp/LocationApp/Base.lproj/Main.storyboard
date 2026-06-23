@@ -523,6 +523,11 @@
                                                 <action selector="done:" destination="Pbj-ZR-7ZZ" id="i2U-vc-2yo"/>
                                             </connections>
                                         </barButtonItem>
+                                        <barButtonItem key="rightBarButtonItem" title="Refresh" id="Rf1-bt-n01">
+                                            <connections>
+                                                <action selector="refreshMapFromCloud:" destination="Pbj-ZR-7ZZ" id="Rf2-ac-t02"/>
+                                            </connections>
+                                        </barButtonItem>
                                     </navigationItem>
                                 </items>
                             </navigationBar>

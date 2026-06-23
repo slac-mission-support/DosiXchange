@@ -15,7 +15,7 @@ import CloudKit
 
 //MARK:  Class
 class MapViewController: UIViewController {
-    let locations = container.locations
+    var locations: Locations = container.locations
     @IBOutlet weak var MapView: MKMapView!
     @IBOutlet weak var filtersButton: UIButton!
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
@@ -69,7 +69,24 @@ class MapViewController: UIViewController {
     @IBAction func done(_ sender: Any) {
         self.dismiss(animated: true, completion: nil)
     }
-	
+
+    //refresh button: pull the latest records from CloudKit, then clear and redraw
+    //the pins. synchronize() no-ops while offline (returns the cached count), so an
+    //offline tap still falls through to a local redraw. addAnnotation must run on main.
+    @IBAction func refreshMapFromCloud(_ sender: Any) {
+        DispatchQueue.main.async {
+            self.activityIndicator.startAnimating()
+        }
+        DispatchQueue.global(qos: .background).async {
+            self.locations.synchronize(loaded: { _ in
+                DispatchQueue.main.async {
+                    self.MapView.removeAnnotations(self.MapView.annotations)
+                    self.queryForMap()
+                }
+            })
+        }
+    }
+
 }
 
 //MapView and locationmanager delegate methods

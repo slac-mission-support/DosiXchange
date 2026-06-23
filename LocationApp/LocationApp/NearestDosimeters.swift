@@ -30,7 +30,7 @@ class NearestLocations: UIViewController, UITableViewDataSource, UITableViewDele
 
     let dispatchGroup = DispatchGroup()
     let recordsupdate = RecordsUpdate()
-    let locations = container.locations
+    var locations: Locations = container.locations
 
     var locationManager:CLLocationManager = CLLocationManager()
     var startLocation: CLLocation!
@@ -78,8 +78,8 @@ class NearestLocations: UIViewController, UITableViewDataSource, UITableViewDele
 
         let refreshControl = UIRefreshControl()
         refreshControl.attributedTitle = NSAttributedString(string: "Pull to Refresh Locations")
-        //this query will populate the tableView when the table is pulled.
-        refreshControl.addTarget(self, action: #selector(queryAscendLocations), for: .valueChanged)
+        //pulling the table syncs from CloudKit first, then repopulates with fresh data.
+        refreshControl.addTarget(self, action: #selector(refreshFromCloud), for: .valueChanged)
         refreshControl.beginRefreshing()
         self.nearestTableView.refreshControl = refreshControl
 
@@ -215,8 +215,19 @@ extension NearestLocations {
             }
         }
     } //end func
-            
-    
+
+    //pull-to-refresh: pull the latest records from CloudKit, then re-filter and reload.
+    //synchronize() no-ops while offline (returns the cached count), so an offline pull still
+    //falls through to queryAscendLocations, which ends refreshing and reloads from the cache.
+    @objc func refreshFromCloud() {
+        DispatchQueue.global(qos: .background).async {
+            self.locations.synchronize(loaded: { _ in
+                self.queryAscendLocations()
+            })
+        }
+    }
+
+
     //to be executed for each fetched record
     func recordFetchedBlock(record: LocationRecordCacheItem) {
         //changed nils in string fields to "".
