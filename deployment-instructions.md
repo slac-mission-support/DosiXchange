@@ -118,3 +118,15 @@ day-to-day Xcode builds. Distribution exports select **Production** via the expo
 option above. Moving the repo's default to Production (and the matching CloudKit
 **schema deploy** + production signing) is a separate, SLAC-side step — coordinate
 with the Apple administrator before changing it.
+
+## Deployment Notes
+Include the $USERNAME for the managed config (apple admin JAMF deployment)
+
+<dict>
+    <key>workerName</key>
+    <string>$USERNAME</string>
+</dict>
+
+Keep in mind the username, because we standardized on Azure for the iPads the UPN will resemble their email address. So josh2@slac.stanford.edu for example. 
+
+
