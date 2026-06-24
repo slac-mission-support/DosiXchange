@@ -130,4 +130,6 @@ Include the $USERNAME for the managed config (apple admin JAMF deployment)
 ```
 Keep in mind the username, because we standardized on Azure for the iPads the UPN will resemble their email address. So josh2@slac.stanford.edu for example. 
 
+This config will place the username in the performedby column at each new or revised cloudkit record.
+
 
