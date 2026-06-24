@@ -8,6 +8,7 @@
 import Foundation
 import UIKit
 import MessageUI
+import AVFoundation
 
 //MARK:  Class
 
@@ -269,7 +270,11 @@ extension DeleteOldCyclesViewController: MFMailComposeViewControllerDelegate {
         switch result {
         case .sent:
             hasEmailedExport = true
-            //MFMailComposeViewController already plays the sent sound itself; don't double it.
+            //Play the "sent" sound only on iOS 26+: the redesigned Mail sheet no
+            //longer plays its own there, while older iOS does (gating avoids a double).
+            if #available(iOS 26.0, *) {
+                AudioServicesPlaySystemSound(1001)
+            }
             print("Delete Old Cycles: all-cycles export emailed (\(exportedRecordCount) records)")
             tableView.reloadData()
         case .failed:

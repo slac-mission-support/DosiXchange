@@ -9,6 +9,7 @@
 import Foundation
 import UIKit
 import MessageUI
+import AVFoundation
 //MARK:  Class
 class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate {
     
@@ -221,7 +222,12 @@ class ToolsViewController: UIViewController, MFMailComposeViewControllerDelegate
     
     
     func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-        //MFMailComposeViewController already plays the sent sound itself; don't double it.
+        //Play the "sent" sound only on iOS 26+: the redesigned Mail sheet no longer
+        //plays its own there, while older iOS still does (adding ours would double).
+        //Only on an actual send, not cancel/draft.
+        if result == .sent, #available(iOS 26.0, *) {
+            AudioServicesPlaySystemSound(1001)
+        }
         controller.dismiss(animated: true)
     } //end func mailComposeController
     

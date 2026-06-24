@@ -219,6 +219,14 @@ class LocationsCK : Locations, SettingsService {
         return cachedCycle == item.cycleDate
     }
 
+    // Copies the server-assigned system dates onto a cached item after a successful
+    // upload, so a device-created record shows its System dates without a Reset Cache.
+    // Pure/internal so tests can drive it (CKRecord.creationDate can't be set offline).
+    internal static func applyServerDates(creationDate: Date?, modificationDate: Date?, to item: LocationRecordCacheItem) {
+        item.creationDate = creationDate
+        item.modificationDate = modificationDate
+    }
+
     //MARK:  Super-user delete
 
     // A record may be deleted only when its cycleDate is NOT among the
@@ -373,8 +381,17 @@ class LocationsCK : Locations, SettingsService {
             let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: nil)
             operation.savePolicy = .ifServerRecordUnchanged
             operation.qualityOfService = .userInitiated
+            // The server stamps creationDate/modificationDate (the export's System_Date
+            // columns) on save. Collect the saved records so the cache can pick up those
+            // server dates below, instead of staying nil until a Reset Cache.
+            var savedServerRecords: [CKRecord] = []
             operation.perRecordSaveBlock = { id, result in
-                if case .failure(let error) = result {
+                switch result {
+                case .success(let savedRecord):
+                    // Per-record blocks fire serially on the operation's queue and the
+                    // array is only read after waitUntilFinished, so no lock is needed.
+                    savedServerRecords.append(savedRecord)
+                case .failure(let error):
                     print("Per-record save failed for \(id.recordName): \(error.localizedDescription)")
                 }
             }
@@ -386,6 +403,17 @@ class LocationsCK : Locations, SettingsService {
             }
             self.database.add(operation)
             operation.waitUntilFinished()
+
+            // Backfill the server-assigned System dates onto the cached item, on the
+            // saveChanges thread (holding the cache semaphore) after the op finished —
+            // never from the callback. saveChanges() then persists via cache.save().
+            for savedRecord in savedServerRecords {
+                if let cached = self.cache?.location(forRecordName: savedRecord.recordID.recordName) {
+                    LocationsCK.applyServerDates(creationDate: savedRecord.creationDate,
+                                                 modificationDate: savedRecord.modificationDate,
+                                                 to: cached)
+                }
+            }
         }
     }
     

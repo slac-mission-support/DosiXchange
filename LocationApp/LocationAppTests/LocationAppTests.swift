@@ -707,6 +707,29 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(cells[10], "06/10/2026", "System collected date must still render when present")
     }
 
+    // MARK: - New records carry their System dates after upload
+
+    // uploadChanges copies a saved record's server dates onto the cached item so a
+    // device-created record's System_Date columns populate without a Reset Cache.
+    // CKRecord.creationDate can't be set offline, so the test passes them directly.
+    func test_applyServerDates_populatesSystemDatesOnNewlyCreatedRecord() throws {
+        let item = try makeItem(recordName: "fresh-record")
+        XCTAssertNil(item.creationDate, "Precondition: a device-authored record has no server creation date yet")
+        XCTAssertNil(item.modificationDate, "Precondition: a device-authored record has no server modification date yet")
+
+        let deployed = try XCTUnwrap(noonLocal(year: 2026, month: 6, day: 24))
+        let collected = try XCTUnwrap(noonLocal(year: 2026, month: 7, day: 1))
+        LocationsCK.applyServerDates(creationDate: deployed, modificationDate: collected, to: item)
+
+        XCTAssertEqual(item.creationDate, deployed)
+        XCTAssertEqual(item.modificationDate, collected)
+
+        // Full circle: the two System_Date columns (9, 10) now render instead of blank.
+        let cells = CycleCSVExport.row(for: item).components(separatedBy: ",")
+        XCTAssertEqual(cells[9], "06/24/2026", "System deploy date must populate after upload, no Reset Cache needed")
+        XCTAssertEqual(cells[10], "07/01/2026", "System collected date must populate after upload, no Reset Cache needed")
+    }
+
     /// Noon local time avoids DST-edge surprises when the exporter formats
     /// the date back in the current calendar.
     private func noonLocal(year: Int, month: Int, day: Int) -> Date? {
