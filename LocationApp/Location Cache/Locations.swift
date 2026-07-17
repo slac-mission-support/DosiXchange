@@ -71,13 +71,9 @@ class LocationsCK : Locations, SettingsService {
         
         if reachability.connection != .none {
             updateSettings()
-            let lastDate = self.cache!.locations
-                .filter({ $0.modifiedDate != nil })
-                .max(by: { a,b -> Bool in a.modifiedDate! < b.modifiedDate!})
-
             var predicate = NSPredicate(value: true)
-            if lastDate != nil {
-                predicate = NSPredicate(format: "modifiedDate > %@", argumentArray: [lastDate!.modifiedDate!])
+            if let watermark = LocationsCK.syncWatermark(locations: self.cache!.locations) {
+                predicate = NSPredicate(format: "modifiedDate > %@", argumentArray: [watermark])
             }
 
             print("Location query started")
@@ -227,6 +223,40 @@ class LocationsCK : Locations, SettingsService {
         item.modificationDate = modificationDate
     }
 
+    // Newest modifiedDate among server-stamped records (creationDate set) only.
+    // Device-authored edits carry a scan-time modifiedDate before ever reaching the
+    // server; letting them advance the watermark hides other devices' cloud edits.
+    internal static func syncWatermark(locations: [LocationRecordCacheItem]) -> Date? {
+        return locations
+            .filter({ $0.modifiedDate != nil && $0.creationDate != nil })
+            .max(by: { a, b -> Bool in a.modifiedDate! < b.modifiedDate! })?
+            .modifiedDate
+    }
+
+    // The three-way branch for one queued record after the server lookup: fetched
+    // → merge onto the server copy (carries its change tag); confirmed absent →
+    // first-time insert; unresolved → keep queued, never attempt a tag-less save.
+    internal enum UploadAction {
+        case saveWithTag(CKRecord)
+        case saveAsNew
+        case keepQueued
+    }
+
+    internal static func uploadAction(serverRecord: CKRecord?, confirmedMissing: Bool) -> UploadAction {
+        if let serverRecord = serverRecord {
+            return .saveWithTag(serverRecord)
+        }
+        return confirmedMissing ? .saveAsNew : .keepQueued
+    }
+
+    // Which queued changes leave the retry queue after an upload pass: only those
+    // the server confirmed saved or shouldSkipSave deliberately skipped. Items with
+    // no recordName can never upload; dropping them preserves the old behavior.
+    internal static func shouldRemoveFromQueue(item: LocationRecordCacheItem, resolved: Set<String>) -> Bool {
+        guard let name = item.recordName else { return true }
+        return resolved.contains(name)
+    }
+
     //MARK:  Super-user delete
 
     // A record may be deleted only when its cycleDate is NOT among the
@@ -316,30 +346,49 @@ class LocationsCK : Locations, SettingsService {
         }
     }
 
+    // Outcome of the pre-save server fetch: `records` holds the fetched server
+    // copies; `confirmedMissing` holds IDs the server definitively reported as
+    // nonexistent (safe to insert). IDs in neither set are unresolved this pass.
+    struct ServerLookup {
+        var records: [CKRecord.ID: CKRecord] = [:]
+        var confirmedMissing: Set<CKRecord.ID> = []
+    }
+
     // Fetches the current server-side records for the given IDs. uploadChanges
-    // uses the returned dictionary to (1) skip records the server already shows
-    // collected on the same cycle and (2) apply local fields onto the fetched
-    // base so .ifServerRecordUnchanged can detect mid-flight conflicts via the
-    // record's recordChangeTag.
-    fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> [CKRecord.ID: CKRecord] {
-        guard !ids.isEmpty else { return [:] }
-        var fetched: [CKRecord.ID: CKRecord] = [:]
+    // uses the result to skip already-collected records, to merge local fields
+    // onto the fetched base so .ifServerRecordUnchanged can detect mid-flight
+    // conflicts via the recordChangeTag, and to keep unresolved IDs queued.
+    fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> ServerLookup {
+        guard !ids.isEmpty else { return ServerLookup() }
+        var lookup = ServerLookup()
         let waitSemaphore = DispatchSemaphore(value: 0)
         let fetchOp = CKFetchRecordsOperation(recordIDs: ids)
         fetchOp.qualityOfService = .userInitiated
         fetchOp.perRecordResultBlock = { id, result in
             switch result {
-            case .success(let record): fetched[id] = record
-            case .failure(let error): print("Fetch failed for \(id.recordName): \(error.localizedDescription)")
+            case .success(let record): lookup.records[id] = record
+            case .failure(let error):
+                // Only .unknownItem proves the record isn't on the server. Any
+                // other error leaves the ID unresolved so the save is deferred.
+                if let ckError = error as? CKError, ckError.code == .unknownItem {
+                    lookup.confirmedMissing.insert(id)
+                }
+                else {
+                    print("Fetch unresolved for \(id.recordName): \(error.localizedDescription)")
+                }
             }
         }
         fetchOp.fetchRecordsResultBlock = { _ in waitSemaphore.signal() }
         self.database.add(fetchOp)
         waitSemaphore.wait()
-        return fetched
+        return lookup
     }
 
-    fileprivate func uploadChanges(_ items: [LocationRecordCacheItem]) {
+    // Returns the recordNames RESOLVED this pass: per-record confirmed saves plus
+    // deliberate shouldSkipSave skips. Refused or unresolved records are absent
+    // from the result, so saveChanges keeps them queued for the next retry.
+    fileprivate func uploadChanges(_ items: [LocationRecordCacheItem]) -> Set<String> {
+        var resolved: Set<String> = []
         let size = 200
         var page = 1
         var total = 0
@@ -351,28 +400,34 @@ class LocationsCK : Locations, SettingsService {
             page += 1
 
             let ids = slice.compactMap { $0.recordName }.map { CKRecord.ID(recordName: $0) }
-            let serverRecords = fetchServerRecords(ids)
-            print("Fetched \(serverRecords.count) server records for page of \(slice.count).")
+            let lookup = fetchServerRecords(ids)
+            print("Fetched \(lookup.records.count) server records (\(lookup.confirmedMissing.count) confirmed new) for page of \(slice.count).")
 
             var recordsToSave: [CKRecord] = []
             for item in slice {
                 guard let recordName = item.recordName else { continue }
                 let id = CKRecord.ID(recordName: recordName)
-                if LocationsCK.shouldSkipSave(item: item, serverRecord: serverRecords[id]) {
+                if LocationsCK.shouldSkipSave(item: item, serverRecord: lookup.records[id]) {
                     print("Skipping save for \(recordName): already collected on server for cycle \(item.cycleDate ?? "nil")")
+                    resolved.insert(recordName)
                     continue
                 }
-                if let serverRecord = serverRecords[id] {
+                switch LocationsCK.uploadAction(serverRecord: lookup.records[id],
+                                                confirmedMissing: lookup.confirmedMissing.contains(id)) {
+                case .saveWithTag(let serverRecord):
                     // Apply local fields onto the fetched record so the save carries
                     // the server's recordChangeTag. .ifServerRecordUnchanged then
                     // rejects this write if another device modified the record
                     // between our fetch and save — the core of the concurrent-user fix.
                     item.update(newRecord: serverRecord)
                     recordsToSave.append(serverRecord)
-                }
-                else {
-                    // No record on server yet — first-time upload. No tag to preserve.
+                case .saveAsNew:
+                    // Server confirmed the record doesn't exist — first-time upload.
                     recordsToSave.append(item.to())
+                case .keepQueued:
+                    // A save without the server's change tag would be rejected and
+                    // the record lost; defer to the next sync trigger instead.
+                    print("Server lookup unresolved for \(recordName): keeping queued")
                 }
             }
 
@@ -404,10 +459,11 @@ class LocationsCK : Locations, SettingsService {
             self.database.add(operation)
             operation.waitUntilFinished()
 
-            // Backfill the server-assigned System dates onto the cached item, on the
-            // saveChanges thread (holding the cache semaphore) after the op finished —
-            // never from the callback. saveChanges() then persists via cache.save().
+            // Mark confirmed saves resolved and backfill their server-assigned System
+            // dates, on the saveChanges thread (holding the cache semaphore) after the
+            // op finished — never from the callback. saveChanges() then persists.
             for savedRecord in savedServerRecords {
+                resolved.insert(savedRecord.recordID.recordName)
                 if let cached = self.cache?.location(forRecordName: savedRecord.recordID.recordName) {
                     LocationsCK.applyServerDates(creationDate: savedRecord.creationDate,
                                                  modificationDate: savedRecord.modificationDate,
@@ -415,16 +471,20 @@ class LocationsCK : Locations, SettingsService {
                 }
             }
         }
+        return resolved
     }
-    
+
     private func saveChanges() {
         if reachability.connection != .none {
             DispatchQueue.global(qos: .background).async {
                 self.semaphore.wait()
                 if (!self.cache!.changes.isEmpty) {
                     let items = Array(self.cache!.changes)
-                    self.uploadChanges(items)
-                    self.cache?.changes.removeAll()
+                    let resolved = self.uploadChanges(items)
+                    // Remove only what the server confirmed (or deliberately skipped);
+                    // refused/unresolved edits stay queued and retry on the 300s timer,
+                    // reachability restore, or the next scan.
+                    self.cache?.changes.removeAll(where: { LocationsCK.shouldRemoveFromQueue(item: $0, resolved: resolved) })
                     self.cache?.save()
                     self.semaphore.signal()
                 }

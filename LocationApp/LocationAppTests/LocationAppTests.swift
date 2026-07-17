@@ -730,6 +730,110 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(cells[10], "07/01/2026", "System collected date must populate after upload, no Reset Cache needed")
     }
 
+    // MARK: - Upload resilience: refused uploads stay queued (Day 1)
+
+    // The three-way decision for one queued record after the pre-save server
+    // lookup. A record whose lookup didn't resolve must NOT be saved tag-less —
+    // .ifServerRecordUnchanged would reject it and the old code then dropped it.
+
+    func test_uploadAction_fetchedRecord_savesWithTag() {
+        let server = makeServerRecord(collectedFlag: 0, cycleDate: "1-1-2026")
+        let action = LocationsCK.uploadAction(serverRecord: server, confirmedMissing: false)
+        guard case .saveWithTag(let record) = action else {
+            return XCTFail("expected saveWithTag when the server copy was fetched")
+        }
+        XCTAssertTrue(record === server, "must carry the fetched record so the save keeps its change tag")
+    }
+
+    func test_uploadAction_confirmedMissing_savesAsNew() {
+        let action = LocationsCK.uploadAction(serverRecord: nil, confirmedMissing: true)
+        guard case .saveAsNew = action else {
+            return XCTFail("expected saveAsNew when the server confirmed the record doesn't exist")
+        }
+    }
+
+    func test_uploadAction_unresolvedFetch_keepsQueued() {
+        let action = LocationsCK.uploadAction(serverRecord: nil, confirmedMissing: false)
+        guard case .keepQueued = action else {
+            return XCTFail("an unresolved lookup must defer the save, never attempt it tag-less")
+        }
+    }
+
+    func test_uploadAction_fetchedRecordWinsOverMissingFlag() {
+        let server = makeServerRecord(collectedFlag: 0, cycleDate: "1-1-2026")
+        let action = LocationsCK.uploadAction(serverRecord: server, confirmedMissing: true)
+        guard case .saveWithTag = action else {
+            return XCTFail("a fetched record is definitive even if the id was also flagged missing")
+        }
+    }
+
+    // Queue retention: after an upload pass only resolved recordNames leave the
+    // retry queue — the fix for the unconditional removeAll() that discarded
+    // refused uploads (signed-out iCloud, unaccepted terms, transient errors).
+
+    func test_queueRetention_removesOnlyResolvedNames() throws {
+        let cache = Cache()
+        cache.addChange(try makeItem(recordName: "R1"))
+        cache.addChange(try makeItem(recordName: "R2"))
+        cache.addChange(try makeItem(recordName: "R3"))
+
+        let resolved: Set<String> = ["R1", "R3"]
+        cache.changes.removeAll(where: { LocationsCK.shouldRemoveFromQueue(item: $0, resolved: resolved) })
+
+        XCTAssertEqual(cache.changes.map { $0.recordName }, ["R2"], "the unresolved record must stay queued")
+    }
+
+    func test_queueRetention_keepsRefusedRecords() throws {
+        let cache = Cache()
+        cache.addChange(try makeItem(recordName: "R1"))
+        cache.addChange(try makeItem(recordName: "R2"))
+
+        // An empty resolved set models a fully refused pass (e.g. device signed out).
+        cache.changes.removeAll(where: { LocationsCK.shouldRemoveFromQueue(item: $0, resolved: []) })
+
+        XCTAssertEqual(cache.changes.count, 2, "refused uploads must survive to retry on the next sync")
+    }
+
+    func test_queueRetention_dropsNilRecordName() throws {
+        let cache = Cache()
+        cache.addChange(try makeItem(recordName: nil))
+
+        cache.changes.removeAll(where: { LocationsCK.shouldRemoveFromQueue(item: $0, resolved: []) })
+
+        XCTAssertTrue(cache.changes.isEmpty, "an item that can never upload must not clog the queue forever")
+    }
+
+    // MARK: - Incremental-sync watermark ignores device-authored edits (Day 1)
+
+    // Local scans stamp modifiedDate with scan time before the record ever reaches
+    // the server. If those edits advance the incremental-fetch watermark, cloud
+    // edits by other devices with earlier timestamps are skipped forever.
+
+    func test_syncWatermark_ignoresDeviceAuthoredEdits() throws {
+        let synced = try makeItem(recordName: "R1", creationDate: 1_000, modifiedDate: 5_000)
+        let deviceAuthored = try makeItem(recordName: "R2", modifiedDate: 9_000)
+
+        let watermark = LocationsCK.syncWatermark(locations: [synced, deviceAuthored])
+
+        XCTAssertEqual(watermark, Date(timeIntervalSinceReferenceDate: 5_000),
+                       "an unsynced local edit must not advance the incremental watermark")
+    }
+
+    func test_syncWatermark_picksNewestServerStampedModifiedDate() throws {
+        let older = try makeItem(recordName: "R1", creationDate: 1_000, modifiedDate: 4_000)
+        let newer = try makeItem(recordName: "R2", creationDate: 1_000, modifiedDate: 6_000)
+
+        XCTAssertEqual(LocationsCK.syncWatermark(locations: [older, newer]),
+                       Date(timeIntervalSinceReferenceDate: 6_000))
+    }
+
+    func test_syncWatermark_nilWhenNoServerStampedRecords() throws {
+        let deviceAuthored = try makeItem(recordName: "R1", modifiedDate: 9_000)
+
+        XCTAssertNil(LocationsCK.syncWatermark(locations: [deviceAuthored]),
+                     "an all-local cache must fall back to a full fetch, not a bogus watermark")
+    }
+
     /// Noon local time avoids DST-edge surprises when the exporter formats
     /// the date back in the current calendar.
     private func noonLocal(year: Int, month: Int, day: Int) -> Date? {
@@ -794,7 +898,7 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(original.collectedFlag, 0, "copy must not alias the original")
     }
 
-    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil, creationDate: Double? = nil, modifiedDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"\(QRCode)\"",
             "\"latitude\": \"0\"",
@@ -813,6 +917,12 @@ class LocationAppTests: XCTestCase {
         // Double (seconds since the reference date), so callers pass an interval.
         if let createdDate = createdDate {
             fields.append("\"createdDate\": \(createdDate)")
+        }
+        if let creationDate = creationDate {
+            fields.append("\"creationDate\": \(creationDate)")
+        }
+        if let modifiedDate = modifiedDate {
+            fields.append("\"modifiedDate\": \(modifiedDate)")
         }
         let json = "{ \(fields.joined(separator: ", ")) }"
         return try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
