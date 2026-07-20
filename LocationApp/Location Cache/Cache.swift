@@ -14,6 +14,9 @@ class Cache: Codable {
     var locations = [LocationRecordCacheItem]()
     var changes = [LocationRecordCacheItem]()
     var settings = Settings()
+    // When the last full re-download completed. Nil on caches written by
+    // earlier builds, so an updated device reconciles on its first sync.
+    var lastFullReconcile: Date?
 
     // Transient recordName -> index map. Not persisted; rebuilt after load().
     // Without it, add() does an O(n) firstIndex(where:) per record, which makes
@@ -21,7 +24,7 @@ class Cache: Codable {
     private var locationIndex: [String: Int] = [:]
 
     private enum CodingKeys: String, CodingKey {
-        case version, user, locations, changes, settings
+        case version, user, locations, changes, settings, lastFullReconcile
     }
 
     private func rebuildLocationIndex() {

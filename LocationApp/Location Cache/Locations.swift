@@ -31,6 +31,8 @@ protocol Locations {
 
     var pendingChangeCount: Int { get }
 
+    func accountStatus(completionHandler: @escaping (CKAccountStatus) -> Void)
+
     func eligibleOldCycleRecords(keepingCycles: Int) -> [LocationRecordCacheItem]
 
     func deleteOldCycleRecords(keepingCycles: Int, progress: @escaping (Int, Int) -> Void, completion: @escaping (Int, Error?) -> Void)
@@ -44,6 +46,9 @@ class LocationsCK : Locations, SettingsService {
     var cache: Cache?
     let reachability = Reachability()!
     let semaphore = DispatchSemaphore(value: 1)
+    // True while the in-flight query is a full re-download; queryCompletionHandler
+    // stamps cache.lastFullReconcile only when that query completes.
+    private var fullReconcileInFlight = false
 
     init() {
         reachability.whenReachable = reachable
@@ -68,15 +73,32 @@ class LocationsCK : Locations, SettingsService {
         if self.cache == nil {
             self.cache = Cache.load() ?? Cache()
         }
-        
+
+        // Recovery pass: stranded records (authored here, never confirmed
+        // uploaded) re-enter the queue so the normal upload path retries them.
+        let requeued = self.requeueRecoveryCandidates()
+        if requeued > 0 {
+            print("Recovery: re-queued \(requeued) unsynced records for upload")
+            self.cache!.save()
+        }
+
         if reachability.connection != .none {
             updateSettings()
+            // Fall back to a full re-download when the queue is drained and the
+            // last one is stale — recovered uploads keep their original (old)
+            // modifiedDate, so incremental sync alone would never show them here.
             var predicate = NSPredicate(value: true)
-            if let watermark = LocationsCK.syncWatermark(locations: self.cache!.locations) {
+            var isFullDownload = true
+            if !LocationsCK.shouldRunFullReconcile(pendingChangeCount: self.cache!.changes.count,
+                                                   lastReconcile: self.cache!.lastFullReconcile,
+                                                   now: Date()),
+               let watermark = LocationsCK.syncWatermark(locations: self.cache!.locations) {
                 predicate = NSPredicate(format: "modifiedDate > %@", argumentArray: [watermark])
+                isFullDownload = false
             }
+            self.fullReconcileInFlight = isFullDownload
 
-            print("Location query started")
+            print(isFullDownload ? "Location query started (full reconcile)" : "Location query started")
             self.query(predicate: predicate, sortDescriptors: [], pageSize: 50, loaded:{
                 self.semaphore.signal()
                 loaded($0)
@@ -257,6 +279,44 @@ class LocationsCK : Locations, SettingsService {
         return resolved.contains(name)
     }
 
+    //MARK:  Stranded-record recovery
+
+    // The stranded marker: no server System dates means the record was authored
+    // on this device and no upload was ever confirmed. recordName-less legacy
+    // items can never upload, so they are not candidates.
+    internal static func isRecoveryCandidate(item: LocationRecordCacheItem) -> Bool {
+        return item.recordName != nil && item.creationDate == nil && item.modificationDate == nil
+    }
+
+    // Stranded records not already queued, in cache order. Returns the cached
+    // instances themselves so a recovered upload keeps its original modifiedBy
+    // and modifiedDate — who collected it, and when — instead of restamping.
+    internal static func recoveryCandidates(locations: [LocationRecordCacheItem], queuedNames: Set<String>) -> [LocationRecordCacheItem] {
+        return locations.filter { item in
+            guard let name = item.recordName else { return false }
+            return isRecoveryCandidate(item: item) && !queuedNames.contains(name)
+        }
+    }
+
+    // Whether synchronize should run a full re-download instead of the
+    // incremental fetch: only once the upload queue has drained, at most every
+    // 24 hours, and always when no reconcile timestamp exists yet.
+    internal static func shouldRunFullReconcile(pendingChangeCount: Int, lastReconcile: Date?, now: Date) -> Bool {
+        guard pendingChangeCount == 0 else { return false }
+        guard let lastReconcile = lastReconcile else { return true }
+        return now.timeIntervalSince(lastReconcile) > 24 * 60 * 60
+    }
+
+    // Caller must hold the semaphore. Appends directly rather than through
+    // addChange, which would overwrite modifiedBy with the current user.
+    private func requeueRecoveryCandidates() -> Int {
+        guard let cache = self.cache else { return 0 }
+        let queuedNames = Set(cache.changes.compactMap { $0.recordName })
+        let candidates = LocationsCK.recoveryCandidates(locations: cache.locations, queuedNames: queuedNames)
+        cache.changes.append(contentsOf: candidates)
+        return candidates.count
+    }
+
     //MARK:  Super-user delete
 
     // A record may be deleted only when its cycleDate is NOT among the
@@ -354,10 +414,9 @@ class LocationsCK : Locations, SettingsService {
         var confirmedMissing: Set<CKRecord.ID> = []
     }
 
-    // Fetches the current server-side records for the given IDs. uploadChanges
-    // uses the result to skip already-collected records, to merge local fields
-    // onto the fetched base so .ifServerRecordUnchanged can detect mid-flight
-    // conflicts via the recordChangeTag, and to keep unresolved IDs queued.
+    // Fetches the current server copies for the given IDs so uploadChanges can
+    // skip already-collected records, merge local fields onto the fetched base
+    // (keeping its recordChangeTag), and leave unresolved IDs queued.
     fileprivate func fetchServerRecords(_ ids: [CKRecord.ID]) -> ServerLookup {
         guard !ids.isEmpty else { return ServerLookup() }
         var lookup = ServerLookup()
@@ -415,10 +474,9 @@ class LocationsCK : Locations, SettingsService {
                 switch LocationsCK.uploadAction(serverRecord: lookup.records[id],
                                                 confirmedMissing: lookup.confirmedMissing.contains(id)) {
                 case .saveWithTag(let serverRecord):
-                    // Apply local fields onto the fetched record so the save carries
-                    // the server's recordChangeTag. .ifServerRecordUnchanged then
-                    // rejects this write if another device modified the record
-                    // between our fetch and save — the core of the concurrent-user fix.
+                    // Apply local fields onto the fetched record so the save
+                    // carries the server's recordChangeTag; .ifServerRecordUnchanged
+                    // then rejects the write if another device changed the record.
                     item.update(newRecord: serverRecord)
                     recordsToSave.append(serverRecord)
                 case .saveAsNew:
@@ -498,6 +556,9 @@ class LocationsCK : Locations, SettingsService {
     func queryCompletionHandler(records :[LocationRecordDelegate], completed: Bool?, error: Error?, loaded: @escaping ((Int) -> Void))  {
         if let error = error {
             print(error.localizedDescription)
+            // A failed full download proves nothing; leave the reconcile
+            // timestamp unstamped so the next sync tries again.
+            fullReconcileInFlight = false
             loaded(cache!.locations.count)
             return
         }
@@ -517,6 +578,12 @@ class LocationsCK : Locations, SettingsService {
         if let completed = completed {
             if completed {
                 print("Location query completed.")
+                // A completed full download refreshed every record — restart
+                // the 24h reconcile clock. Runs under the sync's semaphore.
+                if fullReconcileInFlight {
+                    cache!.lastFullReconcile = Date()
+                    fullReconcileInFlight = false
+                }
                 cache!.save()
                 loaded(cache!.locations.count)
             }
@@ -539,6 +606,18 @@ class LocationsCK : Locations, SettingsService {
         }
     }
     
+    // CloudKit public-DB reads work anonymously but writes need an iCloud
+    // account, so a signed-out (or wedged) device fails every upload silently.
+    // The startup screen surfaces this. Never touches the cache semaphore.
+    func accountStatus(completionHandler: @escaping (CKAccountStatus) -> Void) {
+        CKContainer.default().accountStatus { status, error in
+            if let error = error {
+                print("Account status check failed: \(error.localizedDescription)")
+            }
+            completionHandler(status)
+        }
+    }
+
     func fetch(id: String, completionHandler: @escaping (LocationRecordCacheItem?, Error?) -> Void) {
         database.fetch(withRecordID: CKRecord.ID(recordName: id), completionHandler: { record, error in
             if let error = error {

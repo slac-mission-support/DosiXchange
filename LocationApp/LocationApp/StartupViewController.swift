@@ -35,6 +35,10 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
     
     @IBOutlet weak var versionLabel: UILabel!
     @IBOutlet weak var Tools: UIImageView!
+
+    //warning label for iCloud/upload problems that used to fail silently
+    //(built in code so the storyboard stays untouched)
+    let syncWarningLabel = UILabel()
     
     override func viewDidLoad() {
         
@@ -73,7 +77,22 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
         refreshButton.layer.borderColor = borderColorUp
         refreshButton.layer.cornerRadius = 22
         refreshButton.addTarget(self, action: #selector(setProgress), for: .touchUpInside)
-        
+
+        //sync warning label: hidden until there is something to say
+        syncWarningLabel.translatesAutoresizingMaskIntoConstraints = false
+        syncWarningLabel.numberOfLines = 0
+        syncWarningLabel.textAlignment = .center
+        syncWarningLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        syncWarningLabel.textColor = .systemYellow
+        syncWarningLabel.accessibilityIdentifier = "syncWarningLabel"
+        syncWarningLabel.isHidden = true
+        mainView.addSubview(syncWarningLabel)
+        NSLayoutConstraint.activate([
+            syncWarningLabel.topAnchor.constraint(equalTo: refreshButton.bottomAnchor, constant: 24),
+            syncWarningLabel.leadingAnchor.constraint(equalTo: progressView.leadingAnchor),
+            syncWarningLabel.trailingAnchor.constraint(equalTo: progressView.trailingAnchor)
+        ])
+
         // Do any additional setup after loading the view, typically from a nib.
         // Detect Wifi:
         reachability.whenReachable = { reachability in
@@ -148,7 +167,51 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location Manager Error")
     } //end location manager fail.
-    
+
+
+    //MARK:  Sync warning
+
+    // Maps iCloud account status + queued-upload count to the startup warning,
+    // or nil when there is nothing to warn about. Internal (not private) so
+    // LocationAppTests can drive the wording matrix offline.
+    internal static func syncWarningMessage(accountStatus: CKAccountStatus, pendingChangeCount: Int) -> String? {
+        let pending = pendingChangeCount == 1
+            ? "1 scan waiting to upload"
+            : "\(pendingChangeCount) scans waiting to upload"
+        switch accountStatus {
+        case .available:
+            return pendingChangeCount > 0 ? "\(pending) — will retry automatically." : nil
+        case .noAccount:
+            return "Sign in to iCloud in Settings — "
+                + (pendingChangeCount > 0 ? "\(pending)." : "scans cannot upload.")
+        case .restricted:
+            return "iCloud is restricted on this device — "
+                + (pendingChangeCount > 0 ? "\(pending)." : "scans cannot upload.")
+        case .temporarilyUnavailable:
+            return "iCloud needs attention — open Settings and accept any iCloud prompts"
+                + (pendingChangeCount > 0 ? " (\(pending))." : ".")
+        default: // .couldNotDetermine and future cases
+            return pendingChangeCount > 0 ? "iCloud status unknown — \(pending)." : nil
+        }
+    }
+
+    // Refreshes the warning label after each sync. pendingChangeCount takes the
+    // cache semaphore, so both reads run off the main thread.
+    func updateSyncWarning() {
+        DispatchQueue.global(qos: .background).async {
+            let pending = self.locations.pendingChangeCount
+            self.locations.accountStatus { status in
+                let message = StartupViewController.syncWarningMessage(accountStatus: status,
+                                                                       pendingChangeCount: pending)
+                DispatchQueue.main.async {
+                    self.syncWarningLabel.text = message
+                    self.syncWarningLabel.isHidden = (message == nil)
+                }
+            }
+        }
+    }
+
+
     
     @objc func setProgress() {
         
@@ -187,6 +250,8 @@ class StartupViewController: UIViewController, MFMailComposeViewControllerDelega
                     
                     //stop activityIndicator
                     self.activityIndicator.stopAnimating()
+
+                    self.updateSyncWarning()
             }})
         }
         

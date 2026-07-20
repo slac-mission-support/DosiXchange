@@ -730,7 +730,7 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(cells[10], "07/01/2026", "System collected date must populate after upload, no Reset Cache needed")
     }
 
-    // MARK: - Upload resilience: refused uploads stay queued (Day 1)
+    // MARK: - Upload resilience: refused uploads stay queued
 
     // The three-way decision for one queued record after the pre-save server
     // lookup. A record whose lookup didn't resolve must NOT be saved tag-less —
@@ -803,7 +803,7 @@ class LocationAppTests: XCTestCase {
         XCTAssertTrue(cache.changes.isEmpty, "an item that can never upload must not clog the queue forever")
     }
 
-    // MARK: - Incremental-sync watermark ignores device-authored edits (Day 1)
+    // MARK: - Incremental-sync watermark ignores device-authored edits
 
     // Local scans stamp modifiedDate with scan time before the record ever reaches
     // the server. If those edits advance the incremental-fetch watermark, cloud
@@ -832,6 +832,119 @@ class LocationAppTests: XCTestCase {
 
         XCTAssertNil(LocationsCK.syncWatermark(locations: [deviceAuthored]),
                      "an all-local cache must fall back to a full fetch, not a bogus watermark")
+    }
+
+    // MARK: - Stranded-record recovery
+
+    // A record with no server System dates was authored on this device and never
+    // confirmed uploaded — the stranded marker. Each synchronize re-queues those
+    // records so the normal upload path retries them.
+
+    func test_recoveryCandidate_nilServerDates_selected() throws {
+        let stranded = try makeItem(recordName: "R1", cycleDate: "1-1-2026")
+        XCTAssertTrue(LocationsCK.isRecoveryCandidate(item: stranded),
+                      "a never-server-stamped record must be selected for recovery")
+    }
+
+    func test_recoveryCandidate_serverDatesPresent_notSelected() throws {
+        let synced = try makeItem(recordName: "R1", creationDate: 1_000, modificationDate: 1_000)
+        XCTAssertFalse(LocationsCK.isRecoveryCandidate(item: synced),
+                       "a server-stamped record has nothing to recover")
+    }
+
+    func test_recoveryCandidate_partialServerDates_notSelected() throws {
+        // Either system date proves the server has seen the record.
+        let creationOnly = try makeItem(recordName: "R1", creationDate: 1_000)
+        let modificationOnly = try makeItem(recordName: "R2", modificationDate: 1_000)
+        XCTAssertFalse(LocationsCK.isRecoveryCandidate(item: creationOnly))
+        XCTAssertFalse(LocationsCK.isRecoveryCandidate(item: modificationOnly))
+    }
+
+    func test_recoveryCandidate_nilRecordName_notSelected() throws {
+        let orphan = try makeItem(recordName: nil)
+        XCTAssertFalse(LocationsCK.isRecoveryCandidate(item: orphan),
+                       "an item without a recordName can never upload")
+    }
+
+    func test_recovery_requeue_dedupesAgainstExistingQueue() throws {
+        let alreadyQueued = try makeItem(recordName: "R1")
+        let stranded = try makeItem(recordName: "R2")
+        let synced = try makeItem(recordName: "R3", creationDate: 1_000, modificationDate: 1_000)
+
+        let candidates = LocationsCK.recoveryCandidates(locations: [alreadyQueued, stranded, synced],
+                                                        queuedNames: ["R1"])
+
+        XCTAssertEqual(candidates.map { $0.recordName }, ["R2"],
+                       "only stranded records not already queued may be re-queued")
+    }
+
+    func test_recovery_requeuesTheCachedInstanceUnchanged() throws {
+        // The cached instance itself goes back on the queue, so a recovered
+        // upload keeps its original modifiedBy/modifiedDate instead of being
+        // restamped with the current user and time.
+        let stranded = try makeItem(recordName: "R1", modifiedDate: 4_000)
+
+        let candidates = LocationsCK.recoveryCandidates(locations: [stranded], queuedNames: [])
+
+        XCTAssertTrue(candidates.first === stranded, "recovery must queue the cached instance, not a copy")
+        XCTAssertEqual(candidates.first?.modifiedDate, Date(timeIntervalSinceReferenceDate: 4_000),
+                       "the recorded collection time must survive recovery untouched")
+    }
+
+    // MARK: - Recurring stale reconcile
+
+    // Recovered uploads keep their original modifiedDate, which sits below other
+    // devices' incremental watermarks — only a periodic full re-download makes
+    // them visible fleet-wide (and heals pre-existing stale records).
+
+    func test_staleReconcile_runsOnFirstSyncAfterUpdate() {
+        XCTAssertTrue(LocationsCK.shouldRunFullReconcile(pendingChangeCount: 0,
+                                                         lastReconcile: nil,
+                                                         now: Date(timeIntervalSinceReferenceDate: 0)),
+                      "no recorded reconcile (fresh install or pre-fix cache) must trigger one")
+    }
+
+    func test_staleReconcile_neverWhileChangesPending() {
+        XCTAssertFalse(LocationsCK.shouldRunFullReconcile(pendingChangeCount: 1,
+                                                          lastReconcile: nil,
+                                                          now: Date(timeIntervalSinceReferenceDate: 0)),
+                       "uploads drain first; a full download must not race queued work")
+    }
+
+    func test_staleReconcile_runsWhenOlderThan24Hours() {
+        XCTAssertTrue(LocationsCK.shouldRunFullReconcile(pendingChangeCount: 0,
+                                                         lastReconcile: Date(timeIntervalSinceReferenceDate: 0),
+                                                         now: Date(timeIntervalSinceReferenceDate: 25 * 60 * 60)))
+    }
+
+    func test_staleReconcile_skipsWhenRecent() {
+        XCTAssertFalse(LocationsCK.shouldRunFullReconcile(pendingChangeCount: 0,
+                                                          lastReconcile: Date(timeIntervalSinceReferenceDate: 0),
+                                                          now: Date(timeIntervalSinceReferenceDate: 60 * 60)))
+    }
+
+    func test_staleReconcile_timestampPersistsAcrossSaveLoad() throws {
+        removeCacheFileOnDisk()
+        addTeardownBlock { self.removeCacheFileOnDisk() }
+
+        let cache = Cache()
+        cache.lastFullReconcile = Date(timeIntervalSinceReferenceDate: 123_456)
+        cache.save()
+
+        let loaded = try XCTUnwrap(Cache.load(), "Cache.load() should return the just-saved cache")
+        XCTAssertEqual(loaded.lastFullReconcile, Date(timeIntervalSinceReferenceDate: 123_456),
+                       "the reconcile clock must survive an app relaunch")
+    }
+
+    func test_staleReconcile_missingTimestampDecodesAsNil() throws {
+        // A cache.txt written by the previous build has no lastFullReconcile key;
+        // it must still decode (as nil) so the first sync after the update reconciles.
+        let json = """
+        { "version": "1.0", "user": "", "locations": [], "changes": [],
+          "settings": { "dosimeterMinimumLength": 11, "dosimeterMaximumLength": 11 } }
+        """
+        let cache = try JSONDecoder().decode(Cache.self, from: Data(json.utf8))
+        XCTAssertNil(cache.lastFullReconcile)
     }
 
     /// Noon local time avoids DST-edge surprises when the exporter formats
@@ -898,7 +1011,7 @@ class LocationAppTests: XCTestCase {
         XCTAssertEqual(original.collectedFlag, 0, "copy must not alias the original")
     }
 
-    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil, creationDate: Double? = nil, modifiedDate: Double? = nil) throws -> LocationRecordCacheItem {
+    private func makeItem(recordName: String?, QRCode: String = "Q", locdescription: String = "test", hasPhoto: Bool = false, cycleDate: String? = nil, createdDate: Double? = nil, creationDate: Double? = nil, modifiedDate: Double? = nil, modificationDate: Double? = nil) throws -> LocationRecordCacheItem {
         var fields: [String] = [
             "\"QRCode\": \"\(QRCode)\"",
             "\"latitude\": \"0\"",
@@ -923,6 +1036,9 @@ class LocationAppTests: XCTestCase {
         }
         if let modifiedDate = modifiedDate {
             fields.append("\"modifiedDate\": \(modifiedDate)")
+        }
+        if let modificationDate = modificationDate {
+            fields.append("\"modificationDate\": \(modificationDate)")
         }
         let json = "{ \(fields.joined(separator: ", ")) }"
         return try JSONDecoder().decode(LocationRecordCacheItem.self, from: Data(json.utf8))
@@ -1065,6 +1181,44 @@ class LocationAppTests: XCTestCase {
 
     // Collects every UIButton in a view tree so a built popup can be inspected
     // without reaching into its private subviews.
+    // MARK: - Sync warning (account visibility)
+
+    // CloudKit reads work anonymously but writes need an iCloud account, so a
+    // signed-out or wedged device failed every upload silently. The startup
+    // screen now maps account status + queued-upload count to a visible warning.
+
+    func test_accountWarningMessage_perStatus() {
+        XCTAssertNil(StartupViewController.syncWarningMessage(accountStatus: .available, pendingChangeCount: 0),
+                     "a healthy account with nothing queued needs no warning")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .noAccount, pendingChangeCount: 0),
+                       "Sign in to iCloud in Settings — scans cannot upload.")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .restricted, pendingChangeCount: 0),
+                       "iCloud is restricted on this device — scans cannot upload.")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .temporarilyUnavailable, pendingChangeCount: 0),
+                       "iCloud needs attention — open Settings and accept any iCloud prompts.")
+        XCTAssertNil(StartupViewController.syncWarningMessage(accountStatus: .couldNotDetermine, pendingChangeCount: 0),
+                     "an indeterminate status with nothing queued is not worth alarming the user")
+    }
+
+    func test_pendingWarning_reflectsPendingChangeCount() {
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .available, pendingChangeCount: 1),
+                       "1 scan waiting to upload — will retry automatically.")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .available, pendingChangeCount: 43),
+                       "43 scans waiting to upload — will retry automatically.")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .noAccount, pendingChangeCount: 43),
+                       "Sign in to iCloud in Settings — 43 scans waiting to upload.")
+        XCTAssertEqual(StartupViewController.syncWarningMessage(accountStatus: .couldNotDetermine, pendingChangeCount: 2),
+                       "iCloud status unknown — 2 scans waiting to upload.")
+    }
+
+    func test_syncWarningLabel_installedAndHiddenUntilFirstSync() throws {
+        let controller = try loadStartupViewController()
+        XCTAssertNotNil(controller.syncWarningLabel.superview,
+                        "the warning label must be installed in the startup view hierarchy")
+        XCTAssertTrue(controller.syncWarningLabel.isHidden,
+                      "no warning shows until a sync reports something wrong")
+    }
+
     private func buttons(in view: UIView) -> [UIButton] {
         view.subviews.reduce(into: []) { result, subview in
             if let button = subview as? UIButton { result.append(button) }
@@ -1397,6 +1551,7 @@ private final class RefreshSpyLocations: Locations {
     func reset(_ loaded: @escaping ((Int) -> Void)) { loaded(0) }
     func fetch(id: String, completionHandler: @escaping (LocationRecordCacheItem?, Error?) -> Void) { completionHandler(nil, nil) }
     var pendingChangeCount: Int { 0 }
+    func accountStatus(completionHandler: @escaping (CKAccountStatus) -> Void) { completionHandler(.available) }
     func eligibleOldCycleRecords(keepingCycles: Int) -> [LocationRecordCacheItem] { [] }
     func deleteOldCycleRecords(keepingCycles: Int, progress: @escaping (Int, Int) -> Void, completion: @escaping (Int, Error?) -> Void) { completion(0, nil) }
 }
