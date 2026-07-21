@@ -31,7 +31,19 @@
 		8421B0692165BBB80041A53A /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8421B0672165BBB80041A53A /* Main.storyboard */; };
 		8421B06B2165BBB90041A53A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8421B06A2165BBB90041A53A /* Assets.xcassets */; };
 		8421B06E2165BBB90041A53A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8421B06C2165BBB90041A53A /* LaunchScreen.storyboard */; };
-		8421B0792165BBB90041A53A /* LocationAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8421B0782165BBB90041A53A /* LocationAppTests.swift */; };
+		DAB0000000000000000001 /* TestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000001 /* TestFixtures.swift */; };
+		DAB0000000000000000002 /* CacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000002 /* CacheTests.swift */; };
+		DAB0000000000000000003 /* RecordItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000003 /* RecordItemTests.swift */; };
+		DAB0000000000000000004 /* SyncUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000004 /* SyncUploadTests.swift */; };
+		DAB0000000000000000005 /* SyncRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000005 /* SyncRecoveryTests.swift */; };
+		DAB0000000000000000006 /* SyncAcceptanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000006 /* SyncAcceptanceTests.swift */; };
+		DAB0000000000000000007 /* ExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000007 /* ExportTests.swift */; };
+		DAB0000000000000000008 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000008 /* SettingsTests.swift */; };
+		DAB0000000000000000009 /* SuperUserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF0000000000000000009 /* SuperUserTests.swift */; };
+		DAB000000000000000000A /* StartupScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000A /* StartupScreenTests.swift */; };
+		DAB000000000000000000B /* PopupAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000B /* PopupAlertTests.swift */; };
+		DAB000000000000000000C /* ManagedAppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000C /* ManagedAppConfigTests.swift */; };
+		DAB000000000000000000D /* RefreshFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000D /* RefreshFlowTests.swift */; };
 		8421B0842165BBB90041A53A /* LocationAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8421B0832165BBB90041A53A /* LocationAppUITests.swift */; };
 		8434D57B25956DE800B2E413 /* RepairCycleDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8434D57A25956DE800B2E413 /* RepairCycleDate.swift */; };
 		8434D58025957C9300B2E413 /* Data_File.csv in Resources */ = {isa = PBXBuildFile; fileRef = 8434D57F25957C9300B2E413 /* Data_File.csv */; };
@@ -111,7 +123,19 @@
 		8421B06D2165BBB90041A53A /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		8421B06F2165BBB90041A53A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8421B0742165BBB90041A53A /* LocationAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocationAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8421B0782165BBB90041A53A /* LocationAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationAppTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000001 /* TestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestFixtures.swift; sourceTree = "<group>"; };
+		DAF0000000000000000002 /* CacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000003 /* RecordItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordItemTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000004 /* SyncUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncUploadTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000005 /* SyncRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRecoveryTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000006 /* SyncAcceptanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncAcceptanceTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000007 /* ExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000008 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
+		DAF0000000000000000009 /* SuperUserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuperUserTests.swift; sourceTree = "<group>"; };
+		DAF000000000000000000A /* StartupScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupScreenTests.swift; sourceTree = "<group>"; };
+		DAF000000000000000000B /* PopupAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopupAlertTests.swift; sourceTree = "<group>"; };
+		DAF000000000000000000C /* ManagedAppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedAppConfigTests.swift; sourceTree = "<group>"; };
+		DAF000000000000000000D /* RefreshFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshFlowTests.swift; sourceTree = "<group>"; };
 		8421B07A2165BBB90041A53A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8421B07F2165BBB90041A53A /* LocationAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocationAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8421B0832165BBB90041A53A /* LocationAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationAppUITests.swift; sourceTree = "<group>"; };
@@ -265,7 +289,19 @@
 		8421B0772165BBB90041A53A /* LocationAppTests */ = {
 			isa = PBXGroup;
 			children = (
-				8421B0782165BBB90041A53A /* LocationAppTests.swift */,
+				DAF0000000000000000001 /* TestFixtures.swift */,
+				DAF0000000000000000002 /* CacheTests.swift */,
+				DAF0000000000000000003 /* RecordItemTests.swift */,
+				DAF0000000000000000004 /* SyncUploadTests.swift */,
+				DAF0000000000000000005 /* SyncRecoveryTests.swift */,
+				DAF0000000000000000006 /* SyncAcceptanceTests.swift */,
+				DAF0000000000000000007 /* ExportTests.swift */,
+				DAF0000000000000000008 /* SettingsTests.swift */,
+				DAF0000000000000000009 /* SuperUserTests.swift */,
+				DAF000000000000000000A /* StartupScreenTests.swift */,
+				DAF000000000000000000B /* PopupAlertTests.swift */,
+				DAF000000000000000000C /* ManagedAppConfigTests.swift */,
+				DAF000000000000000000D /* RefreshFlowTests.swift */,
 				8421B07A2165BBB90041A53A /* Info.plist */,
 			);
 			path = LocationAppTests;
@@ -574,7 +610,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8421B0792165BBB90041A53A /* LocationAppTests.swift in Sources */,
+				DAB0000000000000000001 /* TestFixtures.swift in Sources */,
+				DAB0000000000000000002 /* CacheTests.swift in Sources */,
+				DAB0000000000000000003 /* RecordItemTests.swift in Sources */,
+				DAB0000000000000000004 /* SyncUploadTests.swift in Sources */,
+				DAB0000000000000000005 /* SyncRecoveryTests.swift in Sources */,
+				DAB0000000000000000006 /* SyncAcceptanceTests.swift in Sources */,
+				DAB0000000000000000007 /* ExportTests.swift in Sources */,
+				DAB0000000000000000008 /* SettingsTests.swift in Sources */,
+				DAB0000000000000000009 /* SuperUserTests.swift in Sources */,
+				DAB000000000000000000A /* StartupScreenTests.swift in Sources */,
+				DAB000000000000000000B /* PopupAlertTests.swift in Sources */,
+				DAB000000000000000000C /* ManagedAppConfigTests.swift in Sources */,
+				DAB000000000000000000D /* RefreshFlowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

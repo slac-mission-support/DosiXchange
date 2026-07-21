@@ -181,6 +181,9 @@ class LocationsCK : Locations, SettingsService {
     
     func reset(_ loaded: @escaping  ((Int) -> Void)) {
         semaphore.wait()
+        // Stranded records exist only in locations until re-queued; queue them
+        // before clear() so a reset can never discard an unuploaded scan.
+        _ = self.requeueRecoveryCandidates()
         self.cache?.clear()
         semaphore.signal()
         self.synchronize(loaded: loaded)
