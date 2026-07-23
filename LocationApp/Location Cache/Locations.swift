@@ -49,6 +49,10 @@ class LocationsCK : Locations, SettingsService {
     // True while the in-flight query is a full re-download; queryCompletionHandler
     // stamps cache.lastFullReconcile only when that query completes.
     private var fullReconcileInFlight = false
+    // Every recordName the in-flight full re-download has returned so far,
+    // accumulated across cursor pages. Once the download completes, any cached
+    // record NOT in this set was deleted server-side and gets pruned.
+    private var fullReconcileSeenNames = Set<String>()
 
     init() {
         reachability.whenReachable = reachable
@@ -97,6 +101,9 @@ class LocationsCK : Locations, SettingsService {
                 isFullDownload = false
             }
             self.fullReconcileInFlight = isFullDownload
+            if isFullDownload {
+                self.fullReconcileSeenNames.removeAll()
+            }
 
             print(isFullDownload ? "Location query started (full reconcile)" : "Location query started")
             self.query(predicate: predicate, sortDescriptors: [], pageSize: 50, loaded:{
@@ -308,6 +315,24 @@ class LocationsCK : Locations, SettingsService {
         guard pendingChangeCount == 0 else { return false }
         guard let lastReconcile = lastReconcile else { return true }
         return now.timeIntervalSince(lastReconcile) > 24 * 60 * 60
+    }
+
+    // After a COMPLETED full re-download, prune cached records the server did
+    // not return (deleted server-side) — but never queued uploads, stranded
+    // records, recordName-less legacy items, or anything on an empty result.
+    internal static func namesToPruneAfterReconcile(locations: [LocationRecordCacheItem],
+                                                    serverNames: Set<String>,
+                                                    queuedNames: Set<String>) -> Set<String> {
+        guard !serverNames.isEmpty else { return [] }
+        var result = Set<String>()
+        for item in locations {
+            guard let name = item.recordName else { continue }
+            if serverNames.contains(name) { continue }
+            if queuedNames.contains(name) { continue }
+            if isRecoveryCandidate(item: item) { continue }
+            result.insert(name)
+        }
+        return result
     }
 
     // Caller must hold the semaphore. Appends directly rather than through
@@ -562,12 +587,18 @@ class LocationsCK : Locations, SettingsService {
             // A failed full download proves nothing; leave the reconcile
             // timestamp unstamped so the next sync tries again.
             fullReconcileInFlight = false
+            fullReconcileSeenNames.removeAll()
             loaded(cache!.locations.count)
             return
         }
-        
+
         if (!records.isEmpty){
             for record in records {
+                // Track by raw recordID, not the converted item: a record that
+                // fails conversion is still on the server and must not be pruned.
+                if fullReconcileInFlight, let record = record as? CKRecord {
+                    fullReconcileSeenNames.insert(record.recordID.recordName)
+                }
                 if let item = LocationRecordCacheItem(withRecord: record as! CKRecord) {
                     cache!.add(item)
                 }
@@ -577,15 +608,24 @@ class LocationsCK : Locations, SettingsService {
             }
             print("Cache new records: \(records.count)")
         }
-        
+
         if let completed = completed {
             if completed {
                 print("Location query completed.")
                 // A completed full download refreshed every record — restart
                 // the 24h reconcile clock. Runs under the sync's semaphore.
                 if fullReconcileInFlight {
+                    let queuedNames = Set(cache!.changes.compactMap { $0.recordName })
+                    let pruned = LocationsCK.namesToPruneAfterReconcile(locations: cache!.locations,
+                                                                        serverNames: fullReconcileSeenNames,
+                                                                        queuedNames: queuedNames)
+                    if !pruned.isEmpty {
+                        let removed = cache!.remove(recordNames: pruned)
+                        print("Full reconcile: pruned \(removed) server-deleted records")
+                    }
                     cache!.lastFullReconcile = Date()
                     fullReconcileInFlight = false
+                    fullReconcileSeenNames.removeAll()
                 }
                 cache!.save()
                 loaded(cache!.locations.count)
