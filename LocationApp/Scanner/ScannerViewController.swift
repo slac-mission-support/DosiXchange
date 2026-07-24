@@ -951,7 +951,7 @@ extension ScannerViewController {  //alerts
         newRecord.setValue(variables.mismatch ?? 0, forKey: "mismatch")
 
         if let qrCode = variables.QRCode {
-            let reportGroup = Groups[qrCode]
+            let reportGroup = ReportGroups.group(for: qrCode)
             newRecord.setValue(reportGroup, forKey: "reportGroup")
         }
 

@@ -45,6 +45,7 @@
 		DAB000000000000000000C /* ManagedAppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000C /* ManagedAppConfigTests.swift */; };
 		DAB000000000000000000D /* RefreshFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000D /* RefreshFlowTests.swift */; };
 		DAB000000000000000000E /* ReconcilePruneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000E /* ReconcilePruneTests.swift */; };
+		DAB000000000000000000F /* ReportGroupsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF000000000000000000F /* ReportGroupsTests.swift */; };
 		8421B0842165BBB90041A53A /* LocationAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8421B0832165BBB90041A53A /* LocationAppUITests.swift */; };
 		8434D57B25956DE800B2E413 /* RepairCycleDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8434D57A25956DE800B2E413 /* RepairCycleDate.swift */; };
 		8434D58025957C9300B2E413 /* Data_File.csv in Resources */ = {isa = PBXBuildFile; fileRef = 8434D57F25957C9300B2E413 /* Data_File.csv */; };
@@ -78,6 +79,7 @@
 		DA20260622000000000000D2 /* ManagedAppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA20260622000000000000D1 /* ManagedAppConfig.swift */; };
 		E404C0C62A124558000D2D14 /* Locations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E404C0C42A124558000D2D14 /* Locations.swift */; };
 		E40663E02A1CB77100AA3BC1 /* Groups.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40663DF2A1CB77100AA3BC1 /* Groups.swift */; };
+		DA20260724000000000000E2 /* ReportGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA20260724000000000000E1 /* ReportGroups.swift */; };
 		E40663E22A1CC2AF00AA3BC1 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		E465C7C62A1CC9E600B7465B /* UpdateGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = E465C7C52A1CC9E600B7465B /* UpdateGroups.swift */; };
 /* End PBXBuildFile section */
@@ -138,6 +140,7 @@
 		DAF000000000000000000C /* ManagedAppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedAppConfigTests.swift; sourceTree = "<group>"; };
 		DAF000000000000000000D /* RefreshFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshFlowTests.swift; sourceTree = "<group>"; };
 		DAF000000000000000000E /* ReconcilePruneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconcilePruneTests.swift; sourceTree = "<group>"; };
+		DAF000000000000000000F /* ReportGroupsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportGroupsTests.swift; sourceTree = "<group>"; };
 		8421B07A2165BBB90041A53A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8421B07F2165BBB90041A53A /* LocationAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocationAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8421B0832165BBB90041A53A /* LocationAppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationAppUITests.swift; sourceTree = "<group>"; };
@@ -175,6 +178,7 @@
 		DA20260622000000000000D1 /* ManagedAppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedAppConfig.swift; sourceTree = "<group>"; };
 		E404C0C42A124558000D2D14 /* Locations.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Locations.swift; sourceTree = "<group>"; };
 		E40663DF2A1CB77100AA3BC1 /* Groups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Groups.swift; sourceTree = "<group>"; };
+		DA20260724000000000000E1 /* ReportGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportGroups.swift; sourceTree = "<group>"; };
 		E465C7C52A1CC9E600B7465B /* UpdateGroups.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UpdateGroups.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -216,6 +220,7 @@
 				E404C0C42A124558000D2D14 /* Locations.swift */,
 				449A7E9C271341B2005AF1F7 /* LocationRecordCacheItem.swift */,
 				E40663DF2A1CB77100AA3BC1 /* Groups.swift */,
+				DA20260724000000000000E1 /* ReportGroups.swift */,
 				5AC96E0F2A2E07330022068C /* BackupLocations.swift */,
 			);
 			path = "Location Cache";
@@ -305,6 +310,7 @@
 				DAF000000000000000000C /* ManagedAppConfigTests.swift */,
 				DAF000000000000000000D /* RefreshFlowTests.swift */,
 				DAF000000000000000000E /* ReconcilePruneTests.swift */,
+				DAF000000000000000000F /* ReportGroupsTests.swift */,
 				8421B07A2165BBB90041A53A /* Info.plist */,
 			);
 			path = LocationAppTests;
@@ -606,6 +612,7 @@
 				84F5ED6721B2024900381E76 /* RecordsUpdate.swift in Sources */,
 				846606C321AA5C380049814C /* MapViewController.swift in Sources */,
 				E40663E02A1CB77100AA3BC1 /* Groups.swift in Sources */,
+				DA20260724000000000000E2 /* ReportGroups.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -627,6 +634,7 @@
 				DAB000000000000000000C /* ManagedAppConfigTests.swift in Sources */,
 				DAB000000000000000000D /* RefreshFlowTests.swift in Sources */,
 				DAB000000000000000000E /* ReconcilePruneTests.swift in Sources */,
+				DAB000000000000000000F /* ReportGroupsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
