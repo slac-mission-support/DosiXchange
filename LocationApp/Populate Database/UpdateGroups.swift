@@ -37,16 +37,22 @@ class UpdateGroups {
                
         let all = locations.filter(by: { _ in true })
 
-        let missingGroups = all.filter({ l in l.reportGroup == nil || l.reportGroup!.isEmpty })
-        if !missingGroups.isEmpty {
-            var changes = [LocationRecordCacheItem]()
-            for missing in missingGroups {
-                if let group = all.first(where: { l in l.reportGroup != nil && !l.reportGroup!.isEmpty && l.QRCode == missing.QRCode}).map( {l in l.reportGroup}) {
-                    missing.reportGroup = group
-                    changes.append(missing)
+        var changes = [LocationRecordCacheItem]()
+        for item in all {
+            if item.reportGroup == nil || item.reportGroup!.isEmpty {
+                let donor = all.first(where: { l in l.reportGroup != nil && !l.reportGroup!.isEmpty && l.QRCode == item.QRCode })?.reportGroup
+                if let group = ReportGroups.resolvedGroup(donor: donor, qrCode: item.QRCode) {
+                    item.reportGroup = group
+                    changes.append(item)
                 }
             }
-                        
+            else if let fixed = ReportGroups.canonicalCaseFix(current: item.reportGroup, qrCode: item.QRCode) {
+                item.reportGroup = fixed
+                changes.append(item)
+            }
+        }
+
+        if !changes.isEmpty {
             locations.save(items: changes, completionHandler: completionHandler)
         }
         else {

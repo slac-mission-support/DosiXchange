@@ -5,6 +5,9 @@
 - Uploads refused by the server are kept and retried instead of being dropped (#73)
 - Recovery pass restores previously stranded collections with their original worker names and dates (#73)
 - Daily reconcile against the server catches records missed by incremental sync (#73)
+- Reconcile also removes records deleted from the server from the local cache (#74)
+- New locations without an exact match in the report group table inherit the group of the highest-numbered entry with the same prefix, at scan time and on backfill (#76)
+- Lowercase "Gen" report groups normalized to "GEN" (#76)
 - Warning at launch when no iCloud account is signed in (#73)
 - Expanded automated test suite covering sync, recovery, and reconcile (#73)
 
