@@ -1,5 +1,10 @@
 # LocationApp Version Notes
 
+## 3.2 (July 2026)
+
+- Removes ghost records left in the local cache when a record is deleted from the CloudKit dashboard.
+- Report Group code inheritance and fallback logic for new QRCodes
+- 
 ## 3.1 (July 2026)
 
 - Uploads refused by the server are kept and retried instead of being dropped (#73)
